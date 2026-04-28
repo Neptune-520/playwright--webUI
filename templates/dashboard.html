@@ -1,0 +1,148 @@
+{% extends 'base.html' %}
+
+{% block title %}仪表盘 - 自动化测试平台{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-speedometer2"></i> 仪表盘</h2>
+        <button class="btn btn-primary" onclick="refreshDashboard()">
+            <i class="bi bi-arrow-clockwise"></i> 刷新
+        </button>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="stat-value text-primary" id="total-tasks">0</div>
+                <div class="stat-label">总任务数</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="stat-value text-info" id="running-tasks">0</div>
+                <div class="stat-label">执行中</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="stat-value text-success" id="completed-tasks">0</div>
+                <div class="stat-label">已完成</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="stat-value text-danger" id="failed-tasks">0</div>
+                <div class="stat-label">失败</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-bar-chart"></i> 统计概览</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-code-slash fs-4 text-primary me-3"></i>
+                                <div>
+                                    <div class="text-muted small">测试脚本</div>
+                                    <div class="fs-5 fw-bold" id="total-scripts">0</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-check-circle fs-4 text-success me-3"></i>
+                                <div>
+                                    <div class="text-muted small">已发布</div>
+                                    <div class="fs-5 fw-bold" id="published-scripts">0</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-geo-alt fs-4 text-info me-3"></i>
+                                <div>
+                                    <div class="text-muted small">元素定位器</div>
+                                    <div class="fs-5 fw-bold" id="total-elements">0</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-percent fs-4 text-warning me-3"></i>
+                                <div>
+                                    <div class="text-muted small">通过率</div>
+                                    <div class="fs-5 fw-bold" id="pass-rate">0%</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-clock-history"></i> 最近任务</h5>
+                </div>
+                <div class="card-body">
+                    <div id="recent-tasks">
+                        <div class="text-center text-muted py-4">暂无数据</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    async function loadDashboard() {
+        try {
+            const response = await axios.get(`${API_BASE}/core/dashboard/`);
+            const data = response.data;
+            
+            document.getElementById('total-tasks').textContent = data.statistics.total_tasks;
+            document.getElementById('running-tasks').textContent = data.statistics.running_tasks;
+            document.getElementById('completed-tasks').textContent = data.statistics.completed_tasks;
+            document.getElementById('failed-tasks').textContent = data.statistics.failed_tasks;
+            document.getElementById('total-scripts').textContent = data.statistics.total_scripts;
+            document.getElementById('published-scripts').textContent = data.statistics.published_scripts;
+            document.getElementById('total-elements').textContent = data.statistics.total_elements || 0;
+            document.getElementById('pass-rate').textContent = data.statistics.pass_rate + '%';
+            
+            const recentTasksHtml = data.recent_tasks.length > 0 
+                ? data.recent_tasks.map(task => `
+                    <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                        <div>
+                            <div class="fw-bold">${task.name}</div>
+                            <small class="text-muted">${formatDate(task.created_at)}</small>
+                        </div>
+                        ${getStatusBadge(task.status)}
+                    </div>
+                `).join('')
+                : '<div class="text-center text-muted py-4">暂无数据</div>';
+            
+            document.getElementById('recent-tasks').innerHTML = recentTasksHtml;
+        } catch (error) {
+            console.error('Failed to load dashboard:', error);
+            showToast('加载数据失败', 'error');
+        }
+    }
+    
+    function refreshDashboard() {
+        loadDashboard();
+        showToast('数据已刷新');
+    }
+    
+    loadDashboard();
+</script>
+{% endblock %}

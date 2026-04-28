@@ -1,0 +1,582 @@
+{% extends 'base.html' %}
+
+{% block title %}脚本管理 - 自动化测试平台{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-code-slash"></i> 脚本管理</h2>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-info" onclick="showImportModal()">
+                <i class="bi bi-upload"></i> 导入
+            </button>
+            <a href="/editor/" class="btn btn-primary">
+                <i class="bi bi-plus"></i> 创建脚本
+            </a>
+        </div>
+    </div>
+
+    <div class="row mb-3 g-2">
+        <div class="col-md-3">
+            <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control" id="script-search" placeholder="搜索脚本名称/编号">
+            </div>
+        </div>
+        <div class="col-md-3">
+            <select class="form-select" id="script-group-filter">
+                <option value="">全部分组</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select class="form-select" id="script-status-filter">
+                <option value="">全部状态</option>
+                <option value="draft">草稿</option>
+                <option value="published">发布</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-primary w-100" onclick="resetScriptSearch()">
+                <i class="bi bi-arrow-counterclockwise"></i> 重置
+            </button>
+        </div>
+        <div class="col-md-2">
+            <select class="form-select" id="script-page-size">
+                <option value="10">10条/页</option>
+                <option value="20" selected>20条/页</option>
+                <option value="50">50条/页</option>
+                <option value="100">100条/页</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0">脚本列表</h5>
+        <div id="script-count" class="text-muted"></div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>脚本名称</th>
+                            <th>分组</th>
+                            <th>版本</th>
+                            <th>状态</th>
+                            <th>步骤数</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scripts-table">
+                        <tr>
+                            <td colspan="8" class="text-center">加载中...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="importModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-upload"></i> 导入脚本</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="import-upload-section">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">选择文件</label>
+                        <div class="border rounded p-4 text-center" id="drop-zone"
+                             ondragover="event.preventDefault(); this.classList.add('border-primary')"
+                             ondragleave="this.classList.remove('border-primary')"
+                             ondrop="handleDrop(event)"
+                             style="cursor: pointer; transition: all 0.2s;"
+                             onclick="document.getElementById('import-file').click()">
+                            <i class="bi bi-cloud-upload" style="font-size: 2rem; color: #6c757d;"></i>
+                            <p class="mt-2 mb-0 text-muted">拖拽文件到此处，或点击选择文件</p>
+                            <small class="text-muted">支持 .json 和 .xlsx 格式</small>
+                            <input type="file" id="import-file" class="d-none" accept=".json,.xlsx,.xls" onchange="handleFileSelect(event)">
+                        </div>
+                        <div id="selected-file-info" class="mt-2" style="display: none;">
+                            <span class="badge bg-info"><i class="bi bi-file-earmark"></i> <span id="selected-file-name"></span></span>
+                            <button class="btn btn-sm btn-link text-danger" onclick="clearSelectedFile()">移除</button>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">冲突处理策略</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="conflict-strategy" id="strategy-skip" value="skip" checked>
+                            <label class="form-check-label" for="strategy-skip">
+                                跳过 — 遇到同名脚本/动作集合时跳过，保留现有数据
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="conflict-strategy" id="strategy-overwrite" value="overwrite">
+                            <label class="form-check-label" for="strategy-overwrite">
+                                覆盖 — 遇到同名脚本/动作集合时覆盖更新
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="conflict-strategy" id="strategy-rename" value="rename">
+                            <label class="form-check-label" for="strategy-rename">
+                                重命名 — 自动为导入的脚本/动作集合生成新名称
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="import-progress-section" style="display: none;">
+                    <div class="text-center mb-3">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">导入中...</span>
+                        </div>
+                        <p class="mt-2">正在导入，请稍候...</p>
+                    </div>
+                    <div class="progress">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div>
+                    </div>
+                </div>
+
+                <div id="import-result-section" style="display: none;">
+                    <div class="alert" id="import-result-alert">
+                        <h5 id="import-result-title"></h5>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <div class="card text-center p-3">
+                                <div class="fs-4 fw-bold text-success" id="result-scripts-created">0</div>
+                                <small class="text-muted">脚本创建</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card text-center p-3">
+                                <div class="fs-4 fw-bold text-warning" id="result-scripts-skipped">0</div>
+                                <small class="text-muted">脚本跳过</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card text-center p-3">
+                                <div class="fs-4 fw-bold text-info" id="result-actionsets-created">0</div>
+                                <small class="text-muted">动作集合创建</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card text-center p-3">
+                                <div class="fs-4 fw-bold text-secondary" id="result-elements-created">0</div>
+                                <small class="text-muted">元素创建</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="import-errors-section" style="display: none;">
+                        <h6>错误详情</h6>
+                        <div class="list-group" id="import-errors-list"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="import-close-btn">关闭</button>
+                <button type="button" class="btn btn-primary" id="import-submit-btn" onclick="doImport()" disabled>
+                    <i class="bi bi-upload"></i> 开始导入
+                </button>
+                <button type="button" class="btn btn-primary" id="import-again-btn" onclick="resetImportModal()" style="display: none;">
+                    <i class="bi bi-arrow-repeat"></i> 再次导入
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="exportModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-download"></i> 导出脚本</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-primary" onclick="doExport('json')">
+                        <i class="bi bi-filetype-json"></i> 导出为 JSON
+                    </button>
+                    <button class="btn btn-outline-success" onclick="doExport('excel')">
+                        <i class="bi bi-file-earmark-spreadsheet"></i> 导出为 Excel
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let scripts = [];
+    let selectedFile = null;
+    let exportScriptId = null;
+    let currentPage = 1;
+
+    async function loadScripts() {
+        try {
+            const response = await axios.get(`${API_BASE}/scripts/`);
+            scripts = response.data;
+            await loadScriptGroupOptions();
+            renderScripts();
+        } catch (error) {
+            console.error('Failed to load scripts:', error);
+            const tbody = document.getElementById('scripts-table');
+            const errorMsg = error.response?.data?.detail || error.response?.data?.error || '加载脚本列表失败，请稍后重试';
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger">
+                <i class="bi bi-exclamation-triangle"></i> ${errorMsg}
+                <br><button class="btn btn-sm btn-outline-danger mt-2" onclick="loadScripts()">
+                    <i class="bi bi-arrow-clockwise"></i> 重试
+                </button>
+            </td></tr>`;
+            showToast(errorMsg, 'error');
+        }
+    }
+
+    async function loadScriptGroupOptions() {
+        try {
+            const response = await axios.get(`${API_BASE}/core/groups/?type=script`);
+            const select = document.getElementById('script-group-filter');
+            select.innerHTML = '<option value="">全部分组</option><option value="__none__">无分组</option>';
+            (response.data || []).forEach(group => {
+                const option = document.createElement('option');
+                option.value = group.id;
+                option.textContent = group.name;
+                select.appendChild(option);
+            });
+        } catch (error) {
+            console.error('Failed to load groups:', error);
+        }
+    }
+
+    function renderScripts() {
+        const keyword = document.getElementById('script-search').value.toLowerCase();
+        const groupFilter = document.getElementById('script-group-filter').value;
+        const statusFilter = document.getElementById('script-status-filter').value;
+        const pageSize = parseInt(document.getElementById('script-page-size').value);
+
+        let filtered = scripts.filter(s => {
+            const matchKeyword = !keyword || 
+                s.name.toLowerCase().includes(keyword) || 
+                s.code.toLowerCase().includes(keyword) || 
+                String(s.id).includes(keyword);
+            let matchGroup = true;
+            if (groupFilter === '__none__') {
+                matchGroup = !s.group;
+            } else if (groupFilter) {
+                matchGroup = s.group == groupFilter;
+            }
+            const matchStatus = !statusFilter || s.status === statusFilter;
+            return matchKeyword && matchGroup && matchStatus;
+        });
+
+        const tbody = document.getElementById('scripts-table');
+        const countEl = document.getElementById('script-count');
+
+        if (scripts.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">暂无数据</td></tr>';
+            countEl.textContent = '';
+            return;
+        }
+
+        const totalFiltered = filtered.length;
+        const totalScripts = scripts.length;
+        const startIndex = (currentPage - 1) * pageSize + 1;
+        const endIndex = Math.min(currentPage * pageSize, totalFiltered);
+
+        if (totalFiltered === 0) {
+            countEl.textContent = '显示 0/0 条';
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">无匹配结果</td></tr>';
+            return;
+        }
+
+        if (startIndex > totalFiltered) {
+            currentPage = 1;
+        }
+
+        const paginatedStart = (currentPage - 1) * pageSize;
+        const paginatedEnd = currentPage * pageSize;
+        const paginatedData = filtered.slice(paginatedStart, paginatedEnd);
+
+        countEl.textContent = `显示 ${startIndex}-${endIndex}/${totalFiltered} 条`;
+
+        tbody.innerHTML = paginatedData.map(script => `
+            <tr>
+                <td>${script.id}</td>
+                <td>
+                    <div class="fw-bold">${script.name}</div>
+                    <small class="text-muted">${script.code}</small>
+                </td>
+                <td>${script.group_name || '<span class="text-muted">无分组</span>'}</td>
+                <td>v${script.version}</td>
+                <td>${getStatusBadge(script.status)}</td>
+                <td>${script.steps_count || 0}</td>
+                <td>${formatDate(script.created_at)}</td>
+                <td>
+                    <div class="btn-group">
+                        <button class="btn btn-outline-primary btn-sm" onclick="editScript(${script.id})" title="编辑">
+                            <i class="bi bi-pencil"></i>
+                        </button>   
+                        <button class="btn btn-outline-secondary btn-sm" onclick="duplicateScript(${script.id})" title="复制">
+                            <i class="bi bi-files"></i>
+                        </button>
+                        <button class="btn btn-outline-info btn-sm" onclick="showExportModal(${script.id})" title="导出">
+                            <i class="bi bi-download"></i>
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm" onclick="deleteScript(${script.id})" title="删除">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function resetScriptSearch() {
+        currentPage = 1;
+        document.getElementById('script-search').value = '';
+        document.getElementById('script-group-filter').value = '';
+        document.getElementById('script-status-filter').value = '';
+        renderScripts();
+    }
+
+    document.getElementById('script-search').addEventListener('input', renderScripts);
+    document.getElementById('script-group-filter').addEventListener('change', renderScripts);
+    document.getElementById('script-status-filter').addEventListener('change', renderScripts);
+    document.getElementById('script-page-size').addEventListener('change', () => { currentPage = 1; renderScripts(); });
+
+    function showExportModal(scriptId) {
+        exportScriptId = scriptId;
+        new bootstrap.Modal(document.getElementById('exportModal')).show();
+    }
+
+    async function doExport(format) {
+        if (!exportScriptId) return;
+
+        try {
+            if (format === 'json') {
+                const response = await axios.get(`${API_BASE}/scripts/${exportScriptId}/export/?export_format=json`);
+                const script = scripts.find(s => s.id === exportScriptId);
+                const filename = `script_${script?.code || exportScriptId}_export.json`;
+                downloadJson(response.data, filename);
+            } else {
+                const response = await axios.get(`${API_BASE}/scripts/${exportScriptId}/export/?export_format=excel`, {
+                    responseType: 'blob'
+                });
+                const script = scripts.find(s => s.id === exportScriptId);
+                const filename = `script_${script?.code || exportScriptId}_export.xlsx`;
+                downloadBlob(response.data, filename,
+                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            }
+            bootstrap.Modal.getInstance(document.getElementById('exportModal')).hide();
+            showToast('导出成功');
+        } catch (error) {
+            console.error('Export failed:', error);
+            showToast('导出失败', 'error');
+        }
+    }
+
+    function downloadJson(data, filename) {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    function downloadBlob(blobData, filename, mimeType) {
+        const blob = new Blob([blobData], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    function showImportModal() {
+        resetImportModal();
+        new bootstrap.Modal(document.getElementById('importModal')).show();
+    }
+
+    function handleDrop(event) {
+        event.preventDefault();
+        event.target.closest('#drop-zone').classList.remove('border-primary');
+        const files = event.dataTransfer.files;
+        if (files.length > 0) {
+            setSelectedFile(files[0]);
+        }
+    }
+
+    function handleFileSelect(event) {
+        const files = event.target.files;
+        if (files.length > 0) {
+            setSelectedFile(files[0]);
+        }
+    }
+
+    function setSelectedFile(file) {
+        const ext = file.name.toLowerCase();
+        if (!ext.endsWith('.json') && !ext.endsWith('.xlsx') && !ext.endsWith('.xls')) {
+            showToast('请选择 .json 或 .xlsx 格式的文件', 'error');
+            return;
+        }
+        selectedFile = file;
+        document.getElementById('selected-file-name').textContent = file.name;
+        document.getElementById('selected-file-info').style.display = 'block';
+        document.getElementById('import-submit-btn').disabled = false;
+    }
+
+    function clearSelectedFile() {
+        selectedFile = null;
+        document.getElementById('import-file').value = '';
+        document.getElementById('selected-file-info').style.display = 'none';
+        document.getElementById('import-submit-btn').disabled = true;
+    }
+
+    async function doImport() {
+        if (!selectedFile) {
+            showToast('请先选择文件', 'error');
+            return;
+        }
+
+        const conflictStrategy = document.querySelector('input[name="conflict-strategy"]:checked').value;
+
+        document.getElementById('import-upload-section').style.display = 'none';
+        document.getElementById('import-progress-section').style.display = 'block';
+        document.getElementById('import-submit-btn').disabled = true;
+
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        formData.append('format', 'auto');
+        formData.append('conflict_strategy', conflictStrategy);
+
+        try {
+            const response = await axios.post(`${API_BASE}/scripts/import/`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+
+            showImportResult(response.data);
+        } catch (error) {
+            console.error('Import failed:', error);
+            let errorMsg = '导入失败';
+            if (error.response?.data?.error) {
+                errorMsg = error.response.data.error;
+            } else if (error.response?.data?.detail) {
+                errorMsg = error.response.data.detail;
+            }
+            document.getElementById('import-progress-section').style.display = 'none';
+            document.getElementById('import-result-section').style.display = 'block';
+            const alertEl = document.getElementById('import-result-alert');
+            alertEl.className = 'alert alert-danger';
+            document.getElementById('import-result-title').textContent = errorMsg;
+            document.getElementById('import-again-btn').style.display = 'inline-block';
+            document.getElementById('import-submit-btn').style.display = 'none';
+        }
+    }
+
+    function showImportResult(result) {
+        document.getElementById('import-progress-section').style.display = 'none';
+        document.getElementById('import-result-section').style.display = 'block';
+
+        const alertEl = document.getElementById('import-result-alert');
+        const hasErrors = result.failed > 0;
+        alertEl.className = hasErrors ? 'alert alert-warning' : 'alert alert-success';
+        document.getElementById('import-result-title').textContent =
+            hasErrors ? '导入完成（部分失败）' : '导入成功';
+
+        document.getElementById('result-scripts-created').textContent =
+            (result.scripts_created || 0) + (result.scripts_overwritten || 0);
+        document.getElementById('result-scripts-skipped').textContent = result.scripts_skipped || 0;
+        document.getElementById('result-actionsets-created').textContent =
+            (result.action_sets_created || 0) + (result.action_sets_overwritten || 0);
+        document.getElementById('result-elements-created').textContent = result.elements_created || 0;
+
+        const errorsSection = document.getElementById('import-errors-section');
+        const errorsList = document.getElementById('import-errors-list');
+        if (result.errors && result.errors.length > 0) {
+            errorsSection.style.display = 'block';
+            errorsList.innerHTML = result.errors.map(err => `
+                <div class="list-group-item list-group-item-${err.type === 'warning' ? 'warning' : 'danger'} py-2">
+                    <small><strong>${err.type === 'warning' ? '警告' : '错误'}:</strong> ${err.message}</small>
+                </div>
+            `).join('');
+        } else {
+            errorsSection.style.display = 'none';
+        }
+
+        document.getElementById('import-again-btn').style.display = 'inline-block';
+        document.getElementById('import-submit-btn').style.display = 'none';
+
+        loadScripts();
+    }
+
+    function resetImportModal() {
+        selectedFile = null;
+        document.getElementById('import-file').value = '';
+        document.getElementById('selected-file-info').style.display = 'none';
+        document.getElementById('import-upload-section').style.display = 'block';
+        document.getElementById('import-progress-section').style.display = 'none';
+        document.getElementById('import-result-section').style.display = 'none';
+        document.getElementById('import-submit-btn').disabled = true;
+        document.getElementById('import-submit-btn').style.display = 'inline-block';
+        document.getElementById('import-again-btn').style.display = 'none';
+        document.getElementById('strategy-skip').checked = true;
+    }
+
+    function editScript(scriptId) {
+        window.location.href = `/editor/?script_id=${scriptId}`;
+    }
+
+    function createTask(scriptId) {
+        window.location.href = `/tasks/?create_task=${scriptId}`;
+    }
+
+    async function duplicateScript(scriptId) {
+        try {
+            await axios.post(`${API_BASE}/scripts/${scriptId}/duplicate/`);
+            showToast('脚本复制成功');
+            loadScripts();
+        } catch (error) {
+            console.error('Failed to duplicate script:', error);
+            showToast('复制失败', 'error');
+        }
+    }
+
+    async function deleteScript(scriptId) {
+        if (!confirm('确定删除此脚本？')) return;
+
+        try {
+            await axios.delete(`${API_BASE}/scripts/${scriptId}/`);
+            showToast('删除成功');
+            loadScripts();
+        } catch (error) {
+            console.error('Failed to delete script:', error);
+            showToast('删除失败', 'error');
+        }
+    }
+
+    loadScripts();
+</script>
+{% endblock %}

@@ -1,0 +1,775 @@
+{% extends 'base.html' %}
+
+{% block title %}聚合任务管理 - 自动化测试平台{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-layers"></i> 聚合任务</h2>
+        <button class="btn btn-primary" onclick="handleCreateAggregate()">
+            <i class="bi bi-plus"></i> 创建聚合任务
+        </button>
+    </div>
+    
+    <div class="card">
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <input type="text" class="form-control" id="aggregate-search" placeholder="搜索任务名称...">
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary w-100" onclick="resetAggregateSearch()">
+                        <i class="bi bi-arrow-clockwise"></i> 重置
+                    </button>
+                </div>
+                <div class="col-md-2">
+                    <select class="form-select" id="aggregate-page-size" onchange="changePageSize()">
+                        <option value="10">10条/页</option>
+                        <option value="20" selected>20条/页</option>
+                        <option value="50">50条/页</option>
+                        <option value="100">100条/页</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <div id="aggregate-pagination-info" class="text-muted pt-2"></div>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>任务名称</th>
+                            <th>脚本数量</th>
+                            <th>完成/失败</th>
+                            <th>状态</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="aggregate-table">
+                        <tr>
+                            <td colspan="7" class="text-center">加载中...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <nav>
+                <ul class="pagination justify-content-center" id="aggregate-pagination"></ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="aggregateModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="aggregateModalTitle">创建聚合任务</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="aggregate-id">
+                <div class="mb-3">
+                    <label class="form-label">任务名称 *</label>
+                    <input type="text" class="form-control" id="aggregate-name" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">描述</label>
+                    <textarea class="form-control" id="aggregate-description" rows="2"></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">选择脚本 *</label>
+                    <input type="text" class="form-control mb-2" id="script-search-input" placeholder="搜索脚本...">
+                    <div class="border rounded p-2" style="max-height: 300px; overflow-y: auto;">
+                        <div id="scripts-checkbox-list">加载中...</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveAggregate()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="detailModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">聚合任务详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="detail-content">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                <button type="button" class="btn btn-primary" id="detail-rerun-btn" onclick="rerunAggregateFromDetail()">重新执行</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="taskDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">子任务详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="taskDetailBody">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let aggregateTasks = [];
+    let allScripts = [];
+    let currentPage = 1;
+    let pageSize = 20;
+    let searchKeyword = '';
+    let dataLoaded = false;
+    let pollingTimer = null;
+    let trackedTaskIds = new Set(); // 跟踪特定任务ID的集合
+    
+    async function loadData() {
+        try {
+            const [aggResponse, scriptsResponse] = await Promise.all([
+                axios.get(`${API_BASE}/tests/aggregate-tasks/`),
+                axios.get(`${API_BASE}/scripts/`)
+            ]);
+            aggregateTasks = aggResponse.data || [];
+            allScripts = scriptsResponse.data || [];
+            renderScriptsCheckboxList();
+            dataLoaded = true;
+            currentPage = 1;
+            renderFilteredTasks();
+        } catch (error) {
+            console.error('Failed to load data:', error);
+            const errorMsg = error.response?.data?.detail || error.response?.data?.error || '加载数据失败，请稍后重试';
+            const tbody = document.getElementById('aggregate-table');
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">
+                <i class="bi bi-exclamation-triangle"></i> ${errorMsg}
+                <br><button class="btn btn-sm btn-outline-danger mt-2" onclick="loadData()">
+                    <i class="bi bi-arrow-clockwise"></i> 重试
+                </button>
+            </td></tr>`;
+            showToast(errorMsg, 'error');
+        }
+    }
+    
+    function getFilteredTasks() {
+        if (!searchKeyword) {
+            return aggregateTasks;
+        }
+        return aggregateTasks.filter(task => 
+            task.name.toLowerCase().includes(searchKeyword.toLowerCase())
+        );
+    }
+    
+    function renderFilteredTasks() {
+        const filtered = getFilteredTasks();
+        const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+        
+        if (currentPage > totalPages) {
+            currentPage = totalPages;
+        }
+        
+        const start = (currentPage - 1) * pageSize;
+        const end = start + pageSize;
+        const paginatedTasks = filtered.slice(start, end);
+        
+        const tbody = document.getElementById('aggregate-table');
+        
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">暂无数据</td></tr>';
+        } else {
+            tbody.innerHTML = paginatedTasks.map(task => `
+                <tr>
+                    <td>${task.id}</td>
+                    <td>${task.name}</td>
+                    <td>${task.total_scripts}</td>
+                    <td>
+                        <span class="text-success">${task.completed_scripts}</span> / 
+                        <span class="text-danger">${task.failed_scripts}</span>
+                    </td>
+                    <td>${getStatusBadge(task.status)}</td>
+                    <td>${formatDate(task.created_at)}</td>
+                    <td>
+                        <button class="btn btn-outline-info btn-sm" onclick="viewDetail(${task.id})" title="详情">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                        ${task.status === 'pending' || task.status === 'failed' || task.status === 'completed' || task.status === 'partial' || task.status === 'cancelled' ? 
+                            `<button class="btn btn-outline-success btn-sm" onclick="executeAggregate(${task.id})" title="执行">
+                                <i class="bi bi-play-fill"></i>
+                            </button>` : ''}
+                        ${task.status === 'running' ? 
+                            `<button class="btn btn-outline-danger btn-sm" onclick="stopAggregate(${task.id})" title="停止">
+                                <i class="bi bi-stop-fill"></i>
+                            </button>` : ''}
+                        <button class="btn btn-outline-primary btn-sm" onclick="editAggregate(${task.id})" title="编辑">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm" onclick="deleteAggregate(${task.id})" title="删除">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+        
+        const infoElement = document.getElementById('aggregate-pagination-info');
+        if (filtered.length === 0) {
+            infoElement.textContent = '';
+        } else {
+            infoElement.textContent = `显示 ${start + 1}-${Math.min(end, filtered.length)} 条，共 ${filtered.length} 条`;
+        }
+        
+        renderPagination(totalPages);
+    }
+    
+    function renderPagination(totalPages) {
+        const pagination = document.getElementById('aggregate-pagination');
+        
+        if (totalPages <= 1) {
+            pagination.innerHTML = '';
+            return;
+        }
+        
+        let html = '';
+        
+        html += `<li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="goToPage(${currentPage - 1}); return false;">上一页</a>
+        </li>`;
+        
+        for (let i = 1; i <= totalPages; i++) {
+            html += `<li class="page-item ${currentPage === i ? 'active' : ''}">
+                <a class="page-link" href="#" onclick="goToPage(${i}); return false;">${i}</a>
+            </li>`;
+        }
+        
+        html += `<li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="goToPage(${currentPage + 1}); return false;">下一页</a>
+        </li>`;
+        
+        pagination.innerHTML = html;
+    }
+    
+    function goToPage(page) {
+        const filtered = getFilteredTasks();
+        const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+        
+        if (page < 1 || page > totalPages) return;
+        
+        currentPage = page;
+        renderFilteredTasks();
+    }
+    
+    function changePageSize() {
+        pageSize = parseInt(document.getElementById('aggregate-page-size').value);
+        currentPage = 1;
+        renderFilteredTasks();
+    }
+    
+    function resetAggregateSearch() {
+        document.getElementById('aggregate-search').value = '';
+        searchKeyword = '';
+        currentPage = 1;
+        renderFilteredTasks();
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        document.getElementById('aggregate-search').addEventListener('input', function(e) {
+            searchKeyword = e.target.value;
+            currentPage = 1;
+            renderFilteredTasks();
+        });
+        
+        document.getElementById('script-search-input').addEventListener('input', function(e) {
+            renderScriptsCheckboxList(e.target.value);
+        });
+    });
+    
+    function renderScriptsCheckboxList(filter = '', selectedIds = []) {
+        const container = document.getElementById('scripts-checkbox-list');
+        
+        if (allScripts.length === 0) {
+            container.innerHTML = '<div class="text-muted">暂无可用脚本</div>';
+            return;
+        }
+        
+        const filteredScripts = filter
+            ? allScripts.filter(script => 
+                script.name.toLowerCase().includes(filter.toLowerCase()) ||
+                script.code.toLowerCase().includes(filter.toLowerCase())
+            )
+            : allScripts;
+        
+        if (filteredScripts.length === 0) {
+            container.innerHTML = '<div class="text-muted">暂无匹配脚本</div>';
+            return;
+        }
+        
+        container.innerHTML = filteredScripts.map(script => {
+            const isChecked = selectedIds.includes(script.id) ? 'checked' : '';
+            return `
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="${script.id}" id="script-${script.id}" ${isChecked}>
+                    <label class="form-check-label" for="script-${script.id}">
+                        ${script.name} <small class="text-muted">(${script.code})</small>
+                    </label>
+                </div>
+            `;
+        }).join('');
+    }
+    
+    function openAggregateModal(id = null) {
+        document.getElementById('aggregate-id').value = id || '';
+        document.getElementById('aggregate-name').value = '';
+        document.getElementById('aggregate-description').value = '';
+        
+        if (id) {
+            const task = aggregateTasks.find(t => t.id === id);
+            if (task) {
+                document.getElementById('aggregateModalTitle').textContent = '编辑聚合任务';
+                document.getElementById('aggregate-name').value = task.name;
+                document.getElementById('aggregate-description').value = task.description || '';
+                
+                const selectedScriptIds = (task.items || []).map(item => item.script);
+                renderScriptsCheckboxList('', selectedScriptIds);
+            } else {
+                document.getElementById('aggregateModalTitle').textContent = '编辑聚合任务';
+                renderScriptsCheckboxList();
+            }
+        } else {
+            document.getElementById('aggregateModalTitle').textContent = '创建聚合任务';
+            renderScriptsCheckboxList();
+        }
+    }
+    
+    async function handleCreateAggregate() {
+        if (allScripts.length === 0) {
+            try {
+                const scriptsResponse = await axios.get(`${API_BASE}/scripts/`);
+                allScripts = scriptsResponse.data || [];
+            } catch (error) {
+                console.error('Failed to load scripts:', error);
+                showToast('加载脚本列表失败', 'error');
+                return;
+            }
+        }
+        openAggregateModal();
+        renderScriptsCheckboxList();
+        new bootstrap.Modal(document.getElementById('aggregateModal')).show();
+    }
+    
+    async function saveAggregate() {
+        const id = document.getElementById('aggregate-id').value;
+        const name = document.getElementById('aggregate-name').value;
+        const description = document.getElementById('aggregate-description').value;
+        
+        const selectedScripts = [];
+        document.querySelectorAll('#scripts-checkbox-list input[type="checkbox"]:checked').forEach((cb, index) => {
+            selectedScripts.push({
+                script: parseInt(cb.value),
+                order: index,
+                parameters: {}
+            });
+        });
+        
+        if (!name) {
+            showToast('请输入任务名称', 'error');
+            return;
+        }
+        
+        if (selectedScripts.length === 0) {
+            showToast('请至少选择一个脚本', 'error');
+            return;
+        }
+        
+        const data = {
+            name: name,
+            description: description,
+            items: selectedScripts
+        };
+        
+        try {
+            if (id) {
+                await axios.put(`${API_BASE}/tests/aggregate-tasks/${id}/`, data);
+                showToast('更新成功');
+            } else {
+                await axios.post(`${API_BASE}/tests/aggregate-tasks/`, data);
+                showToast('创建成功');
+            }
+            
+            bootstrap.Modal.getInstance(document.getElementById('aggregateModal')).hide();
+            loadData();
+        } catch (error) {
+            console.error('Failed to save aggregate task:', error);
+            showToast('保存失败: ' + (error.response?.data?.detail || error.message), 'error');
+        }
+    }
+    
+    function editAggregate(id) {
+        openAggregateModal(id);
+        new bootstrap.Modal(document.getElementById('aggregateModal')).show();
+    }
+    
+    async function deleteAggregate(id) {
+        if (!confirm('确定删除此聚合任务？')) return;
+        
+        try {
+            await axios.delete(`${API_BASE}/tests/aggregate-tasks/${id}/`);
+            showToast('删除成功');
+            loadData();
+        } catch (error) {
+            console.error('Failed to delete aggregate task:', error);
+            showToast('删除失败', 'error');
+        }
+    }
+    
+    async function executeAggregate(id) {
+        try {
+            // 先显示提示，确保用户能看到
+            showToast('开始执行任务');
+            
+            // 调用API启动任务
+            const response = await axios.post(`${API_BASE}/tests/aggregate-tasks/${id}/rerun/`);
+            
+            // 等待提示显示一段时间后再刷新数据
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // 刷新数据
+            await loadData();
+            
+            // 添加当前任务到跟踪列表并启动轮询
+            startPolling(id);
+        } catch (error) {
+            console.error('Failed to execute aggregate task:', error);
+            showToast('执行失败: ' + (error.response?.data?.error || error.message), 'error');
+        }
+    }
+    
+    function startPolling(taskId) {
+        if (taskId) {
+            trackedTaskIds.add(taskId); // 添加到跟踪列表
+        }
+        
+        if (trackedTaskIds.size === 0) {
+            stopPolling();
+            return;
+        }
+        
+        stopPolling();
+        
+        // 立即执行第一次检查
+        (async function immediateCheck() {
+            try {
+                const promises = Array.from(trackedTaskIds).map(tId => 
+                    axios.get(`${API_BASE}/tests/aggregate-tasks/${tId}/`).catch(() => ({ data: null }))
+                );
+                
+                const responses = await Promise.all(promises);
+                const updatedTasks = responses
+                    .filter(response => response && response.data)
+                    .map(response => response.data);
+                
+                for (const updatedTask of updatedTasks) {
+                    const index = aggregateTasks.findIndex(t => t.id === updatedTask.id);
+                    if (index !== -1) {
+                        aggregateTasks[index] = updatedTask;
+                    } else {
+                        aggregateTasks.push(updatedTask);
+                    }
+                    
+                    if (['completed', 'failed', 'cancelled', 'partial'].includes(updatedTask.status)) {
+                        trackedTaskIds.delete(updatedTask.id);
+                    }
+                }
+                
+                renderFilteredTasks();
+                
+                if (trackedTaskIds.size === 0) {
+                    stopPolling();
+                    return;
+                }
+            } catch (error) {
+                console.error('Immediate polling check error:', error);
+            }
+        })();
+        
+        // 启动定时轮询
+        pollingTimer = setInterval(async () => {
+            try {
+                const promises = Array.from(trackedTaskIds).map(tId => 
+                    axios.get(`${API_BASE}/tests/aggregate-tasks/${tId}/`).catch(() => ({ data: null }))
+                );
+                
+                const responses = await Promise.all(promises);
+                const updatedTasks = responses
+                    .filter(response => response && response.data)
+                    .map(response => response.data);
+                
+                for (const updatedTask of updatedTasks) {
+                    const index = aggregateTasks.findIndex(t => t.id === updatedTask.id);
+                    if (index !== -1) {
+                        aggregateTasks[index] = updatedTask;
+                    } else {
+                        aggregateTasks.push(updatedTask);
+                    }
+                    
+                    if (['completed', 'failed', 'cancelled', 'partial'].includes(updatedTask.status)) {
+                        trackedTaskIds.delete(updatedTask.id);
+                    }
+                }
+                
+                renderFilteredTasks();
+                
+                if (trackedTaskIds.size === 0) {
+                    stopPolling();
+                }
+            } catch (error) {
+                console.error('Polling error:', error);
+                stopPolling();
+            }
+        }, 3000);
+    }
+    
+    function stopPolling() {
+        if (pollingTimer) {
+            clearInterval(pollingTimer);
+            pollingTimer = null;
+        }
+    }
+    
+    async function stopAggregate(id) {
+        try {
+            await axios.post(`${API_BASE}/tests/aggregate-tasks/${id}/stop/`);
+            showToast('聚合任务已停止');
+            trackedTaskIds.delete(id); // 从跟踪列表移除
+            if (trackedTaskIds.size === 0) {
+                stopPolling();
+            }
+            loadData();
+        } catch (error) {
+            console.error('Failed to stop aggregate task:', error);
+            showToast('停止失败', 'error');
+        }
+    }
+    
+    async function viewDetail(id) {
+        try {
+            const response = await axios.get(`${API_BASE}/tests/aggregate-tasks/${id}/`);
+            const task = response.data;
+            
+            let currentTaskDetailId = id;
+            
+            let html = `
+                <div class="mb-4">
+                    <h5 class="border-bottom pb-2">基本信息</h5>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>任务ID:</strong> ${task.id}</p>
+                            <p><strong>任务名称:</strong> ${task.name}</p>
+                            <p><strong>状态:</strong> ${getStatusBadge(task.status)}</p>
+                            <p><strong>描述:</strong> ${task.description || '-'}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>创建时间:</strong> ${formatDate(task.created_at)}</p>
+                            <p><strong>开始时间:</strong> ${formatDate(task.started_at)}</p>
+                            <p><strong>结束时间:</strong> ${formatDate(task.finished_at)}</p>
+                            <p><strong>创建人:</strong> ${task.created_by_name || '-'}</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <h5 class="border-bottom pb-2">执行统计</h5>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6>脚本总数</h6>
+                                    <h3>${task.total_scripts}</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-success text-white">
+                                <div class="card-body text-center">
+                                    <h6>已完成</h6>
+                                    <h3>${task.completed_scripts}</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-danger text-white">
+                                <div class="card-body text-center">
+                                    <h6>失败</h6>
+                                    <h3>${task.failed_scripts}</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-info text-white">
+                                <div class="card-body text-center">
+                                    <h6>成功率</h6>
+                                    <h3>${task.total_scripts > 0 ? Math.round((task.completed_scripts / task.total_scripts) * 100) : 0}%</h3>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <h5 class="border-bottom pb-2">脚本执行详情 (${task.total_scripts}个脚本)</h5>
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th>顺序</th>
+                                <th>脚本名称</th>
+                                <th>状态</th>
+                                <th>开始时间</th>
+                                <th>结束时间</th>
+                                <th>错误信息</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            task.items.forEach(item => {
+                html += `
+                    <tr>
+                        <td>${item.order + 1}</td>
+                        <td>${item.script_name}</td>
+                        <td>${getStatusBadge(item.status)}</td>
+                        <td>${formatDate(item.started_at)}</td>
+                        <td>${formatDate(item.finished_at)}</td>
+                        <td class="text-danger">${item.error_message || '-'}</td>
+                        <td>
+                            ${item.task ? `<button class="btn btn-sm btn-outline-primary" onclick="viewSubTaskDetail(${item.task}, '${item.script_name}')">
+                                <i class="bi bi-eye"></i> 查看详情
+                            </button>` : '-'}
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table></div>';
+            
+            document.getElementById('detail-content').innerHTML = html;
+            
+            const rerunBtn = document.getElementById('detail-rerun-btn');
+            if (task.status === 'pending' || task.status === 'failed' || task.status === 'completed' || task.status === 'partial' || task.status === 'cancelled') {
+                rerunBtn.style.display = 'inline-block';
+                rerunBtn.setAttribute('data-task-id', task.id);
+            } else {
+                rerunBtn.style.display = 'none';
+            }
+            
+            new bootstrap.Modal(document.getElementById('detailModal')).show();
+        } catch (error) {
+            console.error('Failed to load detail:', error);
+            showToast('加载详情失败', 'error');
+        }
+    }
+    
+    async function viewSubTaskDetail(taskId, scriptName) {
+        try {
+            const response = await axios.get(`${API_BASE}/tests/tasks/${taskId}/`);
+            const task = response.data;
+            const report = task.report;
+            
+            let reportHtml = '<p class="text-muted">暂无报告数据</p>';
+            if (report) {
+                const passRate = report.pass_rate || 0;
+                reportHtml = `
+                    <div class="mb-3">
+                        <h6>测试报告</h6>
+                        <table class="table table-sm">
+                            <tr>
+                                <th>总步骤</th>
+                                <td>${report.total_steps}</td>
+                                <th>通过</th>
+                                <td class="text-success">${report.passed_steps}</td>
+                            </tr>
+                            <tr>
+                                <th>失败</th>
+                                <td class="text-danger">${report.failed_steps}</td>
+                                <th>跳过</th>
+                                <td class="text-warning">${report.skipped_steps}</td>
+                            </tr>
+                            <tr>
+                                <th>通过率</th>
+                                <td>
+                                    <div class="progress" style="width: 150px; height: 20px;">
+                                        <div class="progress-bar bg-success" style="width: ${passRate}%">${passRate.toFixed(1)}%</div>
+                                    </div>
+                                </td>
+                                <th>执行时长</th>
+                                <td>${report.total_duration ? report.total_duration.toFixed(2) + 's' : '-'}</td>
+                            </tr>
+                        </table>
+                    </div>
+                `;
+            }
+            
+            document.getElementById('taskDetailBody').innerHTML = `
+                <div class="mb-3">
+                    <strong>任务ID:</strong> ${task.id}<br>
+                    <strong>脚本:</strong> ${scriptName}<br>
+                    <strong>状态:</strong> ${getStatusBadge(task.status)}<br>
+                    <strong>创建时间:</strong> ${formatDate(task.created_at)}<br>
+                    <strong>开始时间:</strong> ${formatDate(task.started_at)}<br>
+                    <strong>结束时间:</strong> ${formatDate(task.finished_at)}<br>
+                </div>
+                ${reportHtml}
+                <a href="/results/${taskId}/" class="btn btn-primary mt-3">
+                    <i class="bi bi-box-arrow-up-right me-1"></i>查看任务全部详情
+                </a>
+            `;
+            
+            new bootstrap.Modal(document.getElementById('taskDetailModal')).show();
+        } catch (error) {
+            console.error('Failed to load task detail:', error);
+            showToast('加载详情失败', 'error');
+        }
+    }
+    
+    function rerunAggregateFromDetail() {
+        const rerunBtn = document.getElementById('detail-rerun-btn');
+        const taskId = rerunBtn.getAttribute('data-task-id');
+        if (taskId) {
+            bootstrap.Modal.getInstance(document.getElementById('detailModal')).hide();
+            executeAggregate(parseInt(taskId));
+        }
+    }
+    
+    loadData();
+    
+    (function checkRunningOnLoad() {
+        const checkInterval = setInterval(() => {
+            if (aggregateTasks.length > 0) {
+                clearInterval(checkInterval);
+                // 检查是否有运行中的任务，并为每个运行中的任务添加到跟踪列表
+                const runningTasks = aggregateTasks.filter(task => task.status === 'running');
+                if (runningTasks.length > 0) {
+                    runningTasks.forEach(task => {
+                        trackedTaskIds.add(task.id);
+                    });
+                    startPolling(); // 启动轮询，不需要传入特定ID，因为我们已经设置了trackedTaskIds
+                }
+            }
+        }, 500);
+        setTimeout(() => clearInterval(checkInterval), 10000);
+    })();
+</script>
+{% endblock %}

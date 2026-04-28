@@ -1,0 +1,1574 @@
+{% extends 'base.html' %}
+
+{% block title %}动作集合管理 - 自动化测试平台{% endblock %}
+
+{% block extra_css %}
+<link href="{% static 'css/action_sets.css' %}" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-collection"></i> 动作集合</h2>
+        <div class="d-flex gap-2">
+            <button class="btn btn-warning" onclick="openMarketplaceImportModal()">
+                <i class="bi bi-shop"></i> 从管理平台导入
+            </button>
+            <button class="btn btn-success" onclick="openImportModal()">
+                <i class="bi bi-upload"></i> 批量导入
+            </button>
+            <button class="btn btn-info" id="btn-batch-export" onclick="batchExportActionSets()" style="display: none;">
+                <i class="bi bi-download"></i> 批量导出 <span id="export-count"></span>
+            </button>
+            <button class="btn btn-primary" onclick="openCreateModal()">
+                <i class="bi bi-plus"></i> 创建动作集合
+            </button>
+        </div>
+    </div>
+    
+    <div class="row mb-3 g-2">
+        <div class="col-md-4">
+            <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control" id="actionset-search" placeholder="搜索动作集合名称">
+            </div>
+        </div>
+        <div class="col-md-3">
+            <select class="form-select" id="actionset-group-filter">
+                <option value="">全部分组</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-primary w-100" onclick="resetActionSetSearch()">
+                <i class="bi bi-arrow-counterclockwise"></i> 重置
+            </button>
+        </div>
+        <div class="col-md-2">
+            <select class="form-select" id="actionset-page-size">
+                <option value="10">10条/页</option>
+                <option value="20" selected>20条/页</option>
+                <option value="50">50条/页</option>
+                <option value="100">100条/页</option>
+            </select>
+        </div>
+        <div class="col-md-1 text-end d-flex align-items-center justify-content-end">
+            <span id="actionset-count" class="text-muted"></span>
+        </div>
+    </div>
+    
+    <div id="action-sets-container" class="table-responsive">
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    </div>
+    
+    <input type="file" id="import-file-input" accept=".json" multiple style="display: none;" onchange="handleImportFile(event)">
+</div>
+
+<div class="modal fade" id="actionSetModal" tabindex="-1" data-bs-focus="false">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">创建动作集合</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="action-set-id">
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">名称 *</label>
+                            <input type="text" class="form-control" id="as-name" required>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">代码 *</label>
+                            <input type="text" class="form-control" id="as-code" required>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">状态</label>
+                            <select class="form-select" id="as-active">
+                                <option value="true">启用</option>
+                                <option value="false">禁用</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">描述</label>
+                            <textarea class="form-control" id="as-description" rows="2"></textarea>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">分组</label>
+                    <select class="form-select" id="as-group">
+                        <option value="">无分组</option>
+                    </select>
+                </div>
+                
+                <hr>
+                <h6>参数定义</h6>
+                <div id="parameters-container"></div>
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="addParameter()">
+                    <i class="bi bi-plus"></i> 添加参数
+                </button>
+                
+                <hr>
+                <h6>执行步骤</h6>
+                <div id="steps-container"></div>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="addStep()">
+                        <i class="bi bi-plus"></i> 添加步骤
+                    </button>
+                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="openRecordingModal()">
+                        <i class="bi bi-broadcast"></i> 录制操作
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveActionSet()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="stepModal" tabindex="-1" data-bs-focus="false">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">配置步骤</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">步骤名称</label>
+                    <input type="text" class="form-control" id="step-name">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">操作类型</label>
+                    <select class="form-select" id="step-action-type" onchange="updateStepFields()">
+                        <option value="click">点击元素</option>
+                        <option value="fill">填充输入框</option>
+                        <option value="select">选择下拉选项</option>
+                        <option value="random_select">随机选择</option>
+                        <option value="random_number">随机数值</option>
+                        <option value="wait">等待</option>
+                        <option value="wait_for_selector">等待元素</option>
+                        <option value="hover">悬停</option>
+                        <option value="focus">聚焦</option>
+                        <option value="press">按键</option>
+                        <option value="assert_text">断言文本</option>
+                    </select>
+                </div>
+                <div class="mb-3" id="step-locator-section">
+                    <label class="form-label">定位器</label>
+                    <div id="step-locators-container"></div>
+                    <button type="button" class="btn btn-outline-primary btn-sm mt-1" onclick="addStepLocator()">
+                        <i class="bi bi-plus"></i> 添加定位器
+                    </button>
+                </div>
+                <div class="mb-3" id="step-value-section">
+                    <label class="form-label">操作值</label>
+                    <div class="row">
+                        <div class="col-4">
+                            <select class="form-select" id="step-value-type" onchange="updateValueField()">
+                                <option value="static">静态值</option>
+                                <option value="parameter">参数</option>
+                            </select>
+                        </div>
+                        <div class="col-8">
+                            <input type="text" class="form-control" id="step-value" placeholder="输入值">
+                            <select class="form-select d-none" id="step-param-select"></select>
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-3" id="step-random-options-section" style="display: none;">
+                    <label class="form-label">随机选项配置</label>
+                    <div class="mb-2">
+                        <label class="form-label small">选择模式</label>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-outline-primary active" id="step-mode-dropdown-btn" onclick="setStepSelectMode('dropdown')">下拉框选择</button>
+                            <button type="button" class="btn btn-outline-primary" id="step-mode-click-btn" onclick="setStepSelectMode('click')">点击卡片</button>
+                        </div>
+                        <input type="hidden" id="step-select-mode" value="dropdown">
+                    </div>
+                    <textarea class="form-control" id="step-random-options" rows="6" placeholder="每行输入一个选项值"></textarea>
+                    <small class="text-muted">每行一个选项，执行时将随机选择其中一个</small>
+                </div>
+                <div class="mb-3" id="step-random-number-section" style="display: none;">
+                    <label class="form-label">随机数值配置</label>
+                    <div class="row">
+                        <div class="col-6">
+                            <label class="form-label small">最小值</label>
+                            <input type="number" class="form-control" id="step-random-min" placeholder="最小值">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small">最大值</label>
+                            <input type="number" class="form-control" id="step-random-max" placeholder="最大值">
+                        </div>
+                    </div>
+                    <small class="text-muted">执行时将在最小值和最大值之间随机生成一个整数</small>
+                </div>
+                <div class="mb-3" id="step-force-click-section" style="display: none;">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="step-force-click">
+                        <label class="form-check-label" for="step-force-click">强制点击（跳过可见性检查）</label>
+                    </div>
+                    <small class="text-muted">当元素被遮挡时使用此选项</small>
+                </div>
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="step-enabled" checked>
+                        <label class="form-check-label" for="step-enabled">启用此步骤</label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="confirmStep()">确定</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include "includes/recording_modal.html" with modal_id="asRecordingModal" %}
+
+<div class="modal fade" id="marketplaceImportModal" tabindex="-1" data-bs-focus="false">
+    <div class="modal-dialog modal-fullscreen">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-shop"></i> 从管理平台导入</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control" id="marketplace-current-path" readonly value="根目录">
+                    <button class="btn btn-outline-secondary" onclick="marketplaceNavigateUp()">
+                        <i class="bi bi-arrow-up"></i> 上级
+                    </button>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <input type="text" class="form-control" id="marketplace-search" placeholder="搜索动作集合（全局搜索）">
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-primary w-100" onclick="searchMarketplace()">
+                            <i class="bi bi-search"></i> 搜索
+                        </button>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-outline-secondary w-100" onclick="resetMarketplaceSearch()">
+                            <i class="bi bi-arrow-counterclockwise"></i> 重置
+                        </button>
+                    </div>
+                </div>
+                <div id="marketplace-items-container" class="table-responsive">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <span id="marketplace-selected-count" class="text-muted me-auto"></span>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="importFromMarketplace()">导入</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="marketplacePreviewModal" tabindex="-1" data-bs-focus="false">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="marketplace-preview-title">文件预览</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <pre id="marketplace-preview-content" style="max-height: 60vh; overflow-y: auto; background-color: #f8f9fa; padding: 20px; border-radius: 8px;"></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="uploadConfirmModal" tabindex="-1" data-bs-focus="false">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">提示</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                是否上传到自动化管理平台？
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="skipUpload()">否</button>
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal" onclick="proceedUpload()">是</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="uploadConfigModal" tabindex="-1" data-bs-focus="false">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-cloud-upload"></i> 上传到自动化管理平台</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">文件名</label>
+                    <input type="text" class="form-control" id="upload-filename" placeholder="请输入文件名">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">保存位置</label>
+                    <div class="input-group mb-2">
+                        <input type="text" class="form-control" id="upload-current-path" readonly>
+                        <button class="btn btn-outline-secondary" onclick="navigateUp()">
+                            <i class="bi bi-arrow-up"></i> 上级
+                        </button>
+                        <button class="btn btn-outline-success" onclick="openNewFolderDialog()">
+                            <i class="bi bi-folder-plus"></i> 新建文件夹
+                        </button>
+                    </div>
+                    <div id="upload-folder-list" class="border rounded p-2" style="max-height: 300px; overflow-y: auto;">
+                        <div class="text-center py-3">
+                            <div class="spinner-border text-primary" role="status"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="submitUpload()">提交</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="newFolderModal" tabindex="-1" data-bs-focus="false">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">新建文件夹</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">文件夹名称</label>
+                    <input type="text" class="form-control" id="new-folder-name" placeholder="请输入文件夹名称">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="createNewFolder()">创建</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let actionSets = [];
+    let currentSteps = [];
+    let currentParameters = [];
+    let editingStepIndex = -1;
+    let groups = [];
+    let currentPage = 1;
+    let selectedActionSetIds = new Set();
+    
+    let marketplaceItems = [];
+    let marketplaceSelectedFiles = new Set();
+    let marketplacePreviewData = null;
+    let currentMarketplacePath = '';
+    let pendingSaveData = null;
+    let uploadFolderPath = '';
+    
+    async function loadGroups() {
+        try {
+            const response = await axios.get(`${API_BASE}/core/groups/?type=action_set`);
+            groups = response.data || [];
+            const select = document.getElementById('as-group');
+            select.innerHTML = '<option value="">无分组</option>' + 
+                groups.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+        } catch (error) {
+            console.error('Failed to load groups:', error);
+        }
+    }
+    
+    async function loadActionSets() {
+        try {
+            const response = await axios.get(`${API_BASE}/scripts/action-sets/`);
+            actionSets = response.data;
+            await loadActionSetGroupOptions();
+            renderActionSets();
+        } catch (error) {
+            console.error('Failed to load action sets:', error);
+            showToast('加载失败', 'error');
+        }
+    }
+    
+    async function loadActionSetGroupOptions() {
+        try {
+            const response = await axios.get(`${API_BASE}/core/groups/?type=action_set`);
+            const select = document.getElementById('actionset-group-filter');
+            select.innerHTML = '<option value="">全部分组</option><option value="__none__">无分组</option>';
+            (response.data || []).forEach(group => {
+                const option = document.createElement('option');
+                option.value = group.id;
+                option.textContent = group.name;
+                select.appendChild(option);
+            });
+        } catch (error) {
+            console.error('Failed to load groups:', error);
+        }
+    }
+    
+    function renderActionSets() {
+        const keyword = document.getElementById('actionset-search').value.toLowerCase();
+        const groupFilter = document.getElementById('actionset-group-filter').value;
+        const container = document.getElementById('action-sets-container');
+        const countEl = document.getElementById('actionset-count');
+        const pageSize = parseInt(document.getElementById('actionset-page-size').value);
+        
+        let filtered = actionSets.filter(a => {
+            const matchKeyword = !keyword || a.name.toLowerCase().includes(keyword);
+            let matchGroup = true;
+            if (groupFilter === '__none__') {
+                matchGroup = !a.group;
+            } else if (groupFilter) {
+                matchGroup = a.group == groupFilter;
+            }
+            return matchKeyword && matchGroup;
+        });
+        
+        if (actionSets.length === 0) {
+            container.innerHTML = '<div class="text-center text-muted py-5">暂无动作集合</div>';
+            countEl.textContent = '';
+            updateBatchExportButton();
+            return;
+        }
+        
+        const totalPages = Math.ceil(filtered.length / pageSize);
+        if (currentPage > totalPages) currentPage = totalPages || 1;
+        const start = (currentPage - 1) * pageSize;
+        const end = Math.min(start + pageSize, filtered.length);
+        const pagedData = filtered.slice(start, end);
+        
+        countEl.textContent = `显示 ${filtered.length > 0 ? start + 1 : 0}-${end}/${filtered.length} 条`;
+        
+        if (filtered.length === 0) {
+            container.innerHTML = '<div class="text-center text-muted py-5">无匹配结果</div>';
+            updateBatchExportButton();
+            return;
+        }
+        
+        if (filtered.length === 0) {
+            container.innerHTML = '<div class="text-center text-muted py-5">无匹配结果</div>';
+            updateBatchExportButton();
+            return;
+        }
+        
+        container.innerHTML = `
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th class="col-check" style="width: 40px;"></th>
+                        <th class="col-name">名称</th>
+                        <th class="col-group">分组</th>
+                        <th class="col-code">代码</th>
+                        <th class="col-desc">描述</th>
+                        <th class="col-count" style="width: 100px;">步骤数</th>
+                        <th class="col-count" style="width: 100px;">参数数</th>
+                        <th class="col-count" style="width: 160px;">已应用的脚本数量</th>
+                        <th class="col-actions" style="width: 250px;">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${pagedData.map(as => `
+                    <tr class="${as.is_builtin ? 'table-light' : ''}">
+                        <td>
+                            <input class="form-check-input actionset-checkbox" type="checkbox" value="${as.id}" onchange="toggleActionSetSelection(${as.id})" ${selectedActionSetIds.has(as.id) ? 'checked' : ''}>
+                        </td>
+                        <td>
+                            <strong>${as.name}</strong>
+                            ${as.is_builtin ? '<span class="badge bg-success ms-2">内置</span>' : ''}
+                            ${!as.is_active ? '<span class="badge bg-secondary ms-2">禁用</span>' : ''}
+                        </td>
+                        <td>${as.group_name || '<span class="text-muted">无分组</span>'}</td>
+                        <td><code>${as.code}</code></td>
+                        <td class="text-truncate" style="max-width: 300px;" title="${as.description || '暂无描述'}">${as.description || '暂无描述'}</td>
+                        <td class="text-center">${as.steps_count || 0}</td>
+                        <td class="text-center">${as.parameters_count || 0}</td>
+                        <td class="text-center"><span class="badge bg-info">${as.used_scripts_count || 0}</span></td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-success" onclick="exportSingleActionSet(${as.id})" title="导出">
+                                    <i class="bi bi-download"></i>
+                                </button>
+                                <button class="btn btn-outline-info" onclick="uploadActionSet(${as.id})" title="上传到自动化管理平台">
+                                    <i class="bi bi-cloud-upload"></i>
+                                </button>
+                                <button class="btn btn-outline-primary" onclick="editActionSet(${as.id}, ${as.is_builtin})" title="${as.is_builtin ? '内置动作集合只能查看' : '编辑'}">
+                                    <i class="bi bi-${as.is_builtin ? 'eye' : 'pencil'}"></i>
+                                </button>
+                                <button class="btn btn-outline-danger" onclick="deleteActionSet(${as.id})" ${as.is_builtin ? 'disabled title="内置动作集合不能删除"' : 'title="删除"'}>
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+        
+        updateBatchExportButton();
+    }
+    
+    function openCreateModal() {
+        document.getElementById('modalTitle').textContent = '创建动作集合';
+        document.getElementById('action-set-id').value = '';
+        document.getElementById('as-name').value = '';
+        document.getElementById('as-code').value = '';
+        document.getElementById('as-active').value = 'true';
+        document.getElementById('as-description').value = '';
+        document.getElementById('as-group').value = '';
+        currentSteps = [];
+        currentParameters = [];
+        renderSteps();
+        renderParameters();
+        
+        const saveBtn = document.querySelector('#actionSetModal .modal-footer .btn-primary');
+        saveBtn.disabled = false;
+        saveBtn.textContent = '保存';
+        document.querySelectorAll('#actionSetModal input, #actionSetModal select, #actionSetModal textarea').forEach(el => {
+            el.disabled = false;
+        });
+        
+        new bootstrap.Modal(document.getElementById('actionSetModal')).show();
+    }
+    
+    async function editActionSet(id, isBuiltin = false) {
+        try {
+            const response = await axios.get(`${API_BASE}/scripts/action-sets/${id}/`);
+            const as = response.data;
+            
+            const isReadonly = isBuiltin || as.is_builtin;
+            
+            document.getElementById('modalTitle').textContent = isReadonly ? '查看动作集合（只读）' : '编辑动作集合';
+            document.getElementById('action-set-id').value = id;
+            document.getElementById('as-name').value = as.name;
+            document.getElementById('as-code').value = as.code;
+            document.getElementById('as-active').value = as.is_active ? 'true' : 'false';
+            document.getElementById('as-description').value = as.description;
+            document.getElementById('as-group').value = as.group || '';
+            
+            currentSteps = as.steps || [];
+            currentParameters = as.parameters || [];
+            renderSteps();
+            renderParameters();
+            
+            const saveBtn = document.querySelector('#actionSetModal .modal-footer .btn-primary');
+            if (isReadonly) {
+                saveBtn.disabled = true;
+                saveBtn.textContent = '内置动作集合不可修改';
+                document.querySelectorAll('#actionSetModal input, #actionSetModal select, #actionSetModal textarea').forEach(el => {
+                    el.disabled = true;
+                });
+            } else {
+                saveBtn.disabled = false;
+                saveBtn.textContent = '保存';
+                document.querySelectorAll('#actionSetModal input, #actionSetModal select, #actionSetModal textarea').forEach(el => {
+                    el.disabled = false;
+                });
+            }
+            
+            new bootstrap.Modal(document.getElementById('actionSetModal')).show();
+        } catch (error) {
+            console.error('Failed to load action set:', error);
+            showToast('加载失败', 'error');
+        }
+    }
+    
+    async function viewActionSet(id) {
+        await editActionSet(id);
+    }
+    
+    async function deleteActionSet(id) {
+        if (!confirm('确定删除此动作集合？')) return;
+        
+        try {
+            await axios.delete(`${API_BASE}/scripts/action-sets/${id}/`);
+            showToast('删除成功');
+            loadActionSets();
+        } catch (error) {
+            console.error('Failed to delete:', error);
+            showToast('删除失败', 'error');
+        }
+    }
+    
+    function addParameter() {
+        currentParameters.push({name: '', code: '', default_value: '', is_required: true, order: currentParameters.length});
+        renderParameters();
+    }
+    
+    function renderParameters() {
+        const container = document.getElementById('parameters-container');
+        container.innerHTML = currentParameters.map((p, i) => `
+            <div class="row mb-2">
+                <div class="col-3">
+                    <input type="text" class="form-control form-control-sm" placeholder="名称" value="${p.name}" onchange="updateParameter(${i}, 'name', this.value)">
+                </div>
+                <div class="col-3">
+                    <input type="text" class="form-control form-control-sm" placeholder="代码" value="${p.code}" onchange="updateParameter(${i}, 'code', this.value)">
+                </div>
+                <div class="col-3">
+                    <input type="text" class="form-control form-control-sm" placeholder="默认值" value="${p.default_value}" onchange="updateParameter(${i}, 'default_value', this.value)">
+                </div>
+                <div class="col-2">
+                    <select class="form-select form-select-sm" onchange="updateParameter(${i}, 'is_required', this.value === 'true')">
+                        <option value="true" ${p.is_required ? 'selected' : ''}>必填</option>
+                        <option value="false" ${!p.is_required ? 'selected' : ''}>可选</option>
+                    </select>
+                </div>
+                <div class="col-1">
+                    <button class="btn btn-outline-danger btn-sm" onclick="removeParameter(${i})"><i class="bi bi-trash"></i></button>
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    function updateParameter(index, field, value) {
+        currentParameters[index][field] = value;
+    }
+    
+    function removeParameter(index) {
+        currentParameters.splice(index, 1);
+        renderParameters();
+    }
+    
+    let editingStepLocators = [];
+
+    function addStep() {
+        editingStepIndex = -1;
+        editingStepLocators = [{locator_type: 'css', locator_value: '', locator_description: ''}];
+        document.getElementById('step-name').value = '';
+        document.getElementById('step-action-type').value = 'click';
+        document.getElementById('step-value').value = '';
+        document.getElementById('step-value-type').value = 'static';
+        document.getElementById('step-random-options').value = '';
+        document.getElementById('step-random-min').value = '';
+        document.getElementById('step-random-max').value = '';
+        setStepSelectMode('dropdown');
+        document.getElementById('step-enabled').checked = true;
+        updateStepFields();
+        renderStepLocators();
+        new bootstrap.Modal(document.getElementById('stepModal')).show();
+    }
+    
+    function editStep(index) {
+        editingStepIndex = index;
+        const step = currentSteps[index];
+        document.getElementById('step-name').value = step.name;
+        document.getElementById('step-action-type').value = step.action_type;
+        document.getElementById('step-value-type').value = step.action_value_type || 'static';
+        document.getElementById('step-value').value = step.action_value || '';
+        document.getElementById('step-param-select').value = step.parameter_name || '';
+        document.getElementById('step-enabled').checked = step.is_enabled;
+        
+        if (step.action_config && step.action_config.locators && step.action_config.locators.length > 0) {
+            editingStepLocators = step.action_config.locators.map(function(loc) {
+                return {
+                    locator_type: loc.locator_type || 'css',
+                    locator_value: loc.locator_value || '',
+                    locator_description: loc.locator_description || ''
+                };
+            });
+        } else {
+            editingStepLocators = [{
+                locator_type: step.locator_type || 'css',
+                locator_value: step.locator_value || '',
+                locator_description: step.locator_description || ''
+            }];
+        }
+        
+        if (step.random_options && Array.isArray(step.random_options)) {
+            document.getElementById('step-random-options').value = step.random_options.join('\n');
+        } else {
+            document.getElementById('step-random-options').value = '';
+        }
+        
+        document.getElementById('step-random-min').value = step.random_min || '';
+        document.getElementById('step-random-max').value = step.random_max || '';
+        
+        document.getElementById('step-force-click').checked = step.force_click || false;
+        
+        setStepSelectMode(step.select_mode || 'dropdown');
+        
+        updateStepFields();
+        renderStepLocators();
+        new bootstrap.Modal(document.getElementById('stepModal')).show();
+    }
+
+    function renderStepLocators() {
+        var container = document.getElementById('step-locators-container');
+        var locatorTypes = [
+            {value: 'css', label: 'CSS选择器'},
+            {value: 'xpath', label: 'XPath'},
+            {value: 'id', label: 'ID'},
+            {value: 'name', label: 'Name属性'},
+            {value: 'class_name', label: 'Class名称'},
+            {value: 'tag_name', label: '标签名'},
+            {value: 'text', label: '文本内容'},
+            {value: 'role', label: 'Role'},
+            {value: 'test_id', label: 'Test ID'},
+            {value: 'placeholder', label: 'Placeholder'},
+            {value: 'label', label: 'Label文本'}
+        ];
+        var html = '';
+        editingStepLocators.forEach(function(loc, idx) {
+            var badge = idx === 0 ? '<span class="badge bg-primary me-1">首选</span>' : '<span class="badge bg-secondary me-1">备选' + idx + '</span>';
+            html += '<div class="row mb-2 align-items-center">' +
+                '<div class="col-auto">' + badge + '</div>' +
+                '<div class="col-3">' +
+                    '<select class="form-select form-select-sm" data-loc-index="' + idx + '" data-loc-field="locator_type" onchange="onStepLocatorChange(' + idx + ', \'locator_type\', this.value)">' +
+                        locatorTypes.map(function(t) {
+                            return '<option value="' + t.value + '"' + (loc.locator_type === t.value ? ' selected' : '') + '>' + t.label + '</option>';
+                        }).join('') +
+                    '</select>' +
+                '</div>' +
+                '<div class="col-4">' +
+                    '<input type="text" class="form-control form-control-sm" data-loc-index="' + idx + '" data-loc-field="locator_value" value="' + (loc.locator_value || '').replace(/"/g, '&quot;') + '" placeholder="定位值" onchange="onStepLocatorChange(' + idx + ', \'locator_value\', this.value)">' +
+                '</div>' +
+                '<div class="col-3">' +
+                    '<input type="text" class="form-control form-control-sm" data-loc-index="' + idx + '" data-loc-field="locator_description" value="' + (loc.locator_description || '').replace(/"/g, '&quot;') + '" placeholder="描述" onchange="onStepLocatorChange(' + idx + ', \'locator_description\', this.value)">' +
+                '</div>' +
+                '<div class="col-auto">' +
+                    (editingStepLocators.length > 1 ? '<button type="button" class="btn btn-outline-danger btn-sm" onclick="removeStepLocator(' + idx + ')"><i class="bi bi-trash"></i></button>' : '') +
+                '</div>' +
+            '</div>';
+        });
+        container.innerHTML = html;
+    }
+
+    function onStepLocatorChange(index, field, value) {
+        editingStepLocators[index][field] = value;
+    }
+
+    function addStepLocator() {
+        editingStepLocators.push({locator_type: 'css', locator_value: '', locator_description: ''});
+        renderStepLocators();
+    }
+
+    function removeStepLocator(index) {
+        editingStepLocators.splice(index, 1);
+        renderStepLocators();
+    }
+    
+    function setStepSelectMode(mode) {
+        document.getElementById('step-select-mode').value = mode;
+        document.getElementById('step-mode-dropdown-btn').classList.toggle('active', mode === 'dropdown');
+        document.getElementById('step-mode-click-btn').classList.toggle('active', mode === 'click');
+    }
+    
+    function updateStepFields() {
+        const actionType = document.getElementById('step-action-type').value;
+        const needsElement = ['click', 'fill', 'select', 'random_select', 'random_number', 'wait_for_selector', 'hover', 'focus', 'assert_text'].includes(actionType);
+        const needsValue = ['fill', 'select', 'wait', 'press', 'assert_text'].includes(actionType);
+        const needsRandomOptions = actionType === 'random_select';
+        const needsRandomNumber = actionType === 'random_number';
+        const needsForceClick = actionType === 'click';
+        
+        document.getElementById('step-locator-section').style.display = needsElement ? 'block' : 'none';
+        document.getElementById('step-value-section').style.display = needsValue ? 'block' : 'none';
+        document.getElementById('step-random-options-section').style.display = needsRandomOptions ? 'block' : 'none';
+        document.getElementById('step-random-number-section').style.display = needsRandomNumber ? 'block' : 'none';
+        document.getElementById('step-force-click-section').style.display = needsForceClick ? 'block' : 'none';
+    }
+    
+    function updateValueField() {
+        const valueType = document.getElementById('step-value-type').value;
+        const paramSelect = document.getElementById('step-param-select');
+        const valueInput = document.getElementById('step-value');
+        
+        if (valueType === 'parameter') {
+            paramSelect.innerHTML = currentParameters.map(p => `<option value="${p.code}">${p.name}</option>`).join('');
+            paramSelect.classList.remove('d-none');
+            valueInput.classList.add('d-none');
+        } else {
+            paramSelect.classList.add('d-none');
+            valueInput.classList.remove('d-none');
+        }
+    }
+    
+    function confirmStep() {
+        const actionType = document.getElementById('step-action-type').value;
+        var actionConfig = {};
+        
+        if (editingStepLocators.length > 0) {
+            actionConfig.locators = editingStepLocators.filter(function(loc) {
+                return loc.locator_value.trim() !== '';
+            });
+        }
+
+        var primaryLocator = editingStepLocators[0] || {locator_type: 'css', locator_value: '', locator_description: ''};
+        
+        const step = {
+            name: document.getElementById('step-name').value || `步骤 ${currentSteps.length + 1}`,
+            order: editingStepIndex >= 0 ? currentSteps[editingStepIndex].order : currentSteps.length,
+            action_type: actionType,
+            locator_type: primaryLocator.locator_type,
+            locator_value: primaryLocator.locator_value,
+            locator_description: primaryLocator.locator_description,
+            action_value: document.getElementById('step-value').value,
+            action_value_type: document.getElementById('step-value-type').value,
+            parameter_name: document.getElementById('step-value-type').value === 'parameter' ? document.getElementById('step-param-select').value : '',
+            is_enabled: document.getElementById('step-enabled').checked,
+            wait_timeout: 10000,
+            action_config: actionConfig,
+        };
+        
+        if (actionType === 'random_select') {
+            const randomOptionsText = document.getElementById('step-random-options').value;
+            step.random_options = randomOptionsText.split('\n')
+                .map(line => line.trim())
+                .filter(line => line.length > 0);
+            step.select_mode = document.getElementById('step-select-mode').value;
+        }
+        
+        if (actionType === 'random_number') {
+            step.random_min = parseInt(document.getElementById('step-random-min').value) || 0;
+            step.random_max = parseInt(document.getElementById('step-random-max').value) || 100;
+        }
+        
+        if (actionType === 'click') {
+            step.force_click = document.getElementById('step-force-click').checked;
+        }
+        
+        if (editingStepIndex >= 0) {
+            currentSteps[editingStepIndex] = step;
+        } else {
+            currentSteps.push(step);
+        }
+        
+        renderSteps();
+        bootstrap.Modal.getInstance(document.getElementById('stepModal')).hide();
+    }
+    
+    function renderSteps() {
+        const container = document.getElementById('steps-container');
+        container.innerHTML = currentSteps.map((s, i) => {
+            var locators = (s.action_config && s.action_config.locators) || [];
+            var locInfo = locators.length > 1 ? locators.length + '个定位器' : (locators.length === 1 || s.locator_value ? '1个定位器' : '无定位器');
+            return `
+            <div class="step-item d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="step-number">${i + 1}</span>
+                    <strong>${s.name}</strong>
+                    <small class="text-muted ms-2">${s.action_type} - ${locInfo}</small>
+                </div>
+                <div>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="editStep(${i})"><i class="bi bi-pencil"></i></button>
+                    <button class="btn btn-outline-danger btn-sm" onclick="removeStep(${i})"><i class="bi bi-trash"></i></button>
+                </div>
+            </div>
+        `;
+        }).join('');
+    }
+    
+    function removeStep(index) {
+        currentSteps.splice(index, 1);
+        currentSteps.forEach((s, i) => s.order = i);
+        renderSteps();
+    }
+    
+    async function saveActionSet() {
+        const id = document.getElementById('action-set-id').value;
+        const data = {
+            name: document.getElementById('as-name').value,
+            code: document.getElementById('as-code').value,
+            is_active: document.getElementById('as-active').value === 'true',
+            description: document.getElementById('as-description').value,
+            group: document.getElementById('as-group').value || null,
+            steps: currentSteps,
+            parameters: currentParameters,
+        };
+        
+        if (!data.name || !data.code) {
+            showToast('请填写名称和代码', 'error');
+            return;
+        }
+        
+        try {
+            if (id) {
+                await axios.put(`${API_BASE}/scripts/action-sets/${id}/`, data);
+                bootstrap.Modal.getInstance(document.getElementById('actionSetModal')).hide();
+                showToast('保存成功');
+                loadActionSets();
+            } else {
+                await axios.post(`${API_BASE}/scripts/action-sets/`, data);
+                bootstrap.Modal.getInstance(document.getElementById('actionSetModal')).hide();
+                showToast('保存成功');
+                loadActionSets();
+                pendingSaveData = data;
+                new bootstrap.Modal(document.getElementById('uploadConfirmModal')).show();
+            }
+        } catch (error) {
+            console.error('Failed to save:', error);
+            showToast('保存失败: ' + (error.response?.data?.detail || error.message), 'error');
+        }
+    }
+    
+    function skipUpload() {
+        pendingSaveData = null;
+    }
+    
+    function proceedUpload() {
+        if (!pendingSaveData) return;
+        document.getElementById('upload-filename').value = pendingSaveData.name + '.json';
+        uploadFolderPath = '';
+        loadUploadFolderList('');
+        new bootstrap.Modal(document.getElementById('uploadConfigModal')).show();
+    }
+    
+    async function uploadActionSet(id) {
+        try {
+            const response = await axios.get(`${API_BASE}/scripts/action-sets/${id}/`);
+            const as = response.data;
+            
+            pendingSaveData = as;
+            document.getElementById('upload-filename').value = as.name + '.json';
+            uploadFolderPath = '';
+            loadUploadFolderList('');
+            new bootstrap.Modal(document.getElementById('uploadConfigModal')).show();
+        } catch (error) {
+            console.error('Failed to load action set:', error);
+            showToast('加载失败', 'error');
+        }
+    }
+    
+    function resetActionSetSearch() {
+        document.getElementById('actionset-search').value = '';
+        document.getElementById('actionset-group-filter').value = '';
+        currentPage = 1;
+        renderActionSets();
+    }
+    
+    document.getElementById('actionset-search').addEventListener('input', () => { currentPage = 1; renderActionSets(); });
+    document.getElementById('actionset-group-filter').addEventListener('change', () => { currentPage = 1; renderActionSets(); });
+    document.getElementById('actionset-page-size').addEventListener('change', () => { currentPage = 1; renderActionSets(); });
+    
+    loadGroups();
+    loadActionSets();
+
+    window.openRecordingModal = function() {
+        recRestart('asRecordingModal');
+        new bootstrap.Modal(document.getElementById('asRecordingModal')).show();
+    };
+
+    window.recConfirm = function(modalId) {
+        var data = window.getRecData(modalId);
+        if (!data.actions || data.actions.length === 0) {
+            showToast('没有录制的操作可导入', 'error');
+            return;
+        }
+
+        var typeMap = {
+            click: 'click', fill: 'fill', select: 'select',
+            check: 'check', uncheck: 'uncheck', press: 'press',
+            scroll: 'scroll', navigate: 'navigate', hover: 'hover',
+            random_select: 'random_select', random_number: 'random_number'
+        };
+
+        data.actions.forEach(function(action) {
+            var actionConfig = {};
+            var locatorType = 'css';
+            var locatorValue = '';
+            var locatorDescription = '';
+
+            if (action.locators && action.locators.length > 0) {
+                actionConfig.locators = action.locators.map(function(loc) {
+                    return {
+                        locator_type: loc.locator_type,
+                        locator_value: loc.locator_value,
+                        locator_description: loc.locator_description || ''
+                    };
+                });
+                locatorType = action.locators[0].locator_type;
+                locatorValue = action.locators[0].locator_value;
+                locatorDescription = action.locators[0].locator_description || '';
+            } else if (action.locator) {
+                locatorType = action.locator.locator_type;
+                locatorValue = action.locator.locator_value;
+                locatorDescription = action.locator.locator_description || '';
+                actionConfig.locators = [{
+                    locator_type: locatorType,
+                    locator_value: locatorValue,
+                    locator_description: locatorDescription
+                }];
+            }
+
+            if (action.random_options) {
+                actionConfig.random_options = action.random_options;
+                actionConfig.select_mode = action.select_mode || 'dropdown';
+            }
+            if (action.random_min !== undefined) {
+                actionConfig.random_min = action.random_min;
+                actionConfig.random_max = action.random_max;
+            }
+
+            var step = {
+                name: action.description || action.action_type,
+                order: currentSteps.length,
+                action_type: typeMap[action.action_type] || 'click',
+                locator_type: locatorType,
+                locator_value: locatorValue,
+                locator_description: locatorDescription,
+                action_value: action.value || '',
+                action_value_type: 'static',
+                parameter_name: '',
+                is_enabled: true,
+                wait_timeout: 10000,
+                action_config: actionConfig,
+            };
+            currentSteps.push(step);
+        });
+
+        renderSteps();
+        data.confirmed = true;
+        bootstrap.Modal.getInstance(document.getElementById(modalId)).hide();
+        showToast('已导入 ' + data.actions.length + ' 个录制步骤');
+    };
+
+    function toggleActionSetSelection(id) {
+        if (selectedActionSetIds.has(id)) {
+            selectedActionSetIds.delete(id);
+        } else {
+            selectedActionSetIds.add(id);
+        }
+        updateBatchExportButton();
+    }
+
+    function updateBatchExportButton() {
+        const btn = document.getElementById('btn-batch-export');
+        const countEl = document.getElementById('export-count');
+        
+        if (selectedActionSetIds.size > 0) {
+            btn.style.display = 'inline-block';
+            countEl.textContent = `(${selectedActionSetIds.size})`;
+        } else {
+            btn.style.display = 'none';
+        }
+    }
+
+    async function exportSingleActionSet(id) {
+        try {
+            const response = await axios.get(`${API_BASE}/scripts/action-sets/${id}/export/`);
+            const data = response.data;
+            downloadJsonFile([data], `${data.code}_${data.name}.json`);
+            showToast('导出成功');
+        } catch (error) {
+            console.error('Failed to export:', error);
+            showToast('导出失败', 'error');
+        }
+    }
+
+    async function batchExportActionSets() {
+        if (selectedActionSetIds.size === 0) {
+            showToast('请至少选择一个动作集合', 'error');
+            return;
+        }
+        
+        try {
+            const ids = Array.from(selectedActionSetIds);
+            const response = await axios.post(`${API_BASE}/scripts/action-sets/export/`, { ids: ids });
+            const data = response.data;
+            downloadJsonFile(data, `action_sets_export_${new Date().toISOString().slice(0,10)}.json`);
+            showToast(`已导出 ${data.length} 个动作集合`);
+        } catch (error) {
+            console.error('Failed to batch export:', error);
+            showToast('批量导出失败', 'error');
+        }
+    }
+
+    function downloadJsonFile(data, filename) {
+        const json = JSON.stringify(data, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    function openImportModal() {
+        document.getElementById('import-file-input').click();
+    }
+
+    async function handleImportFile(event) {
+        const files = event.target.files;
+        if (!files || files.length === 0) return;
+        
+        let allImportData = [];
+        
+        try {
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const text = await file.text();
+                const data = JSON.parse(text);
+                
+                if (!Array.isArray(data) && typeof data !== 'object') {
+                    showToast(`文件格式错误：${file.name} 应为JSON数组或JSON对象`, 'error');
+                    event.target.value = '';
+                    return;
+                }
+                
+                if (Array.isArray(data)) {
+                    allImportData = allImportData.concat(data);
+                } else {
+                    allImportData.push(data);
+                }
+            }
+            
+            if (allImportData.length === 0) {
+                showToast('没有可导入的数据', 'error');
+                event.target.value = '';
+                return;
+            }
+            
+            const response = await axios.post(`${API_BASE}/scripts/action-sets/import/`, allImportData);
+            const result = response.data;
+            
+            let message = result.message;
+            if (result.errors && result.errors.length > 0) {
+                message += '\n错误详情：' + result.errors.map(e => `${e.item}: ${e.error}`).join('\n');
+            }
+            
+            showToast(message);
+            loadActionSets();
+        } catch (error) {
+            console.error('Failed to import:', error);
+            if (error.response && error.response.data && error.response.data.detail) {
+                showToast('导入失败: ' + error.response.data.detail, 'error');
+            } else {
+                showToast('导入失败：文件格式不正确', 'error');
+            }
+        }
+        
+        event.target.value = '';
+    }
+
+    window.toggleActionSetSelection = toggleActionSetSelection;
+    window.updateBatchExportButton = updateBatchExportButton;
+    window.exportSingleActionSet = exportSingleActionSet;
+    window.batchExportActionSets = batchExportActionSets;
+    window.openImportModal = openImportModal;
+    window.handleImportFile = handleImportFile;
+    
+    async function openMarketplaceImportModal() {
+        marketplaceSelectedFiles.clear();
+        currentMarketplacePath = '';
+        await loadMarketplaceItems('');
+        document.getElementById('marketplace-current-path').value = '根目录';
+        new bootstrap.Modal(document.getElementById('marketplaceImportModal')).show();
+    }
+    
+    async function loadMarketplaceItems(path) {
+        currentMarketplacePath = path;
+        const container = document.getElementById('marketplace-items-container');
+        container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>';
+        document.getElementById('marketplace-current-path').value = path || '根目录';
+        
+        try {
+            const response = await axios.get(`${API_BASE}/scripts/marketplace/items/`, { params: { path: path } });
+            marketplaceItems = response.data || [];
+            renderMarketplaceItems(marketplaceItems);
+        } catch (error) {
+            container.innerHTML = '<div class="text-center text-muted py-5">加载失败</div>';
+            console.error('Failed to load marketplace items:', error);
+        }
+    }
+    
+    function renderMarketplaceItems(items) {
+        const container = document.getElementById('marketplace-items-container');
+        if (!items || items.length === 0) {
+            container.innerHTML = '<div class="text-center text-muted py-5">暂无数据</div>';
+            updateMarketplaceSelectedCount();
+            return;
+        }
+        
+        container.innerHTML = `
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th class="col-name">文件名</th>
+                        <th class="col-size">集合名</th>
+                        <th class="col-size">描述</th>
+                        <th class="col-time">大小</th>
+                        <th class="col-actions">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${items.map((item, idx) => {
+                        const isFolder = item.is_folder === true;
+                        const isChecked = marketplaceSelectedFiles.has(idx);
+                        const collectionName = isFolder ? '-' : (item._name || '');
+                        const description = isFolder ? '-' : (item._description || '无描述');
+                        const truncatedDesc = description.length > 50 ? description.substring(0, 50) + '...' : description;
+                        const escapedName = item.name.replace(/'/g, "\\'");
+                        const displayPath = item._path ? (item._path.startsWith('./') ? item._path : './' + item._path) : (currentMarketplacePath ? './' + currentMarketplacePath : '');
+                        const displayPathForNav = item._path ? item._path : currentMarketplacePath;
+                        return `
+                        <tr class="${isFolder ? 'table-light marketplace-row' : 'marketplace-row'}" 
+                            onclick="handleRowClick(event, ${idx}, ${isFolder})"
+                            ondblclick="handleRowDblClick(event, ${idx}, ${isFolder})"
+                            data-index="${idx}"
+                            data-is-folder="${isFolder}">
+                            <td class="col-name">
+                                ${isFolder ? '<i class="bi bi-folder text-warning me-2"></i>' : '<i class="bi bi-file-earmark-text text-primary me-2"></i>'}
+                                ${!isFolder ? `<input type="checkbox" class="form-check-input me-2" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleMarketplaceSelection(${idx}, this.checked)">` : ''}
+                                <span title="${item.name}">${item.name}</span>
+                                ${!isFolder && displayPath ? ` <a class="text-muted path-link" style="font-size: 0.85em; cursor: pointer; text-decoration: none;" onclick="event.stopPropagation(); navigateToMarketplacePath('${displayPathForNav.replace(/'/g, "\\'")}')">${displayPath}</a>` : ''}
+                            </td>
+                            <td class="col-size">${collectionName}</td>
+                            <td class="col-size" title="${description}">${truncatedDesc}</td>
+                            <td class="col-time">${formatFileSize(item.size || 0)}</td>
+                            <td class="col-actions">
+                                ${isFolder ? `<button class="btn btn-outline-primary btn-sm" onclick="event.stopPropagation(); enterMarketplaceFolder('${escapedName}')">进入</button>` : `<button class="btn btn-outline-info btn-sm" onclick="event.stopPropagation(); previewMarketplaceFile('${escapedName}', '${item._path || currentMarketplacePath}')">查看</button>`}
+                            </td>
+                        </tr>
+                    `;
+                    }).join('')}
+                </tbody>
+            </table>
+        `;
+        updateMarketplaceSelectedCount();
+    }
+    
+    function handleRowClick(event, idx, isFolder) {
+        if (event.target.closest('button') || event.target.closest('input')) {
+            return;
+        }
+        if (!isFolder) {
+            toggleMarketplaceSelection(idx, !marketplaceSelectedFiles.has(idx));
+        }
+    }
+    
+    function handleRowDblClick(event, idx, isFolder) {
+        if (event.target.closest('button') || event.target.closest('input')) {
+            return;
+        }
+        if (isFolder) {
+            enterMarketplaceFolder(marketplaceItems[idx].name);
+        } else {
+            previewMarketplaceFile(marketplaceItems[idx].name, marketplaceItems[idx]._path || currentMarketplacePath);
+        }
+    }
+    
+    function enterMarketplaceFolder(folderName) {
+        const newPath = currentMarketplacePath ? currentMarketplacePath + '/' + folderName : folderName;
+        loadMarketplaceItems(newPath);
+    }
+    
+    function navigateToMarketplacePath(path) {
+        const cleanPath = path.replace(/^\.\//, '');
+        const dirPath = cleanPath.substring(0, cleanPath.lastIndexOf('/'));
+        loadMarketplaceItems(dirPath);
+    }
+    
+    function marketplaceNavigateUp() {
+        if (!currentMarketplacePath) return;
+        const parts = currentMarketplacePath.split('/').filter(p => p);
+        parts.pop();
+        loadMarketplaceItems(parts.join('/'));
+    }
+    
+    function toggleMarketplaceSelection(idx, checked) {
+        if (checked) {
+            marketplaceSelectedFiles.add(idx);
+        } else {
+            marketplaceSelectedFiles.delete(idx);
+        }
+        updateMarketplaceRowState(idx, checked);
+        updateMarketplaceSelectedCount();
+    }
+    
+    function updateMarketplaceRowState(idx, checked) {
+        const row = document.querySelector(`tr[data-index="${idx}"] input[type="checkbox"]`);
+        if (row) {
+            row.checked = checked;
+        }
+    }
+    
+    function updateMarketplaceSelectedCount() {
+        const countEl = document.getElementById('marketplace-selected-count');
+        if (marketplaceSelectedFiles.size > 0) {
+            countEl.textContent = `已选择 ${marketplaceSelectedFiles.size} 个文件`;
+        } else {
+            countEl.textContent = '';
+        }
+    }
+    
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+    
+    async function searchMarketplace() {
+        const keyword = document.getElementById('marketplace-search').value.trim();
+        if (!keyword) {
+            await loadMarketplaceItems('');
+            return;
+        }
+        
+        const container = document.getElementById('marketplace-items-container');
+        container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>';
+        
+        try {
+            const response = await axios.get(`${API_BASE}/scripts/marketplace/search/`, { params: { keyword: keyword } });
+            marketplaceItems = response.data || [];
+            renderMarketplaceItems(marketplaceItems);
+        } catch (error) {
+            container.innerHTML = '<div class="text-center text-muted py-5">搜索失败</div>';
+            console.error('Failed to search marketplace:', error);
+        }
+    }
+    
+    function resetMarketplaceSearch() {
+        document.getElementById('marketplace-search').value = '';
+        marketplaceSelectedFiles.clear();
+        loadMarketplaceItems('');
+    }
+    
+    async function previewMarketplaceFile(name, path) {
+        try {
+            const response = await axios.get(`${API_BASE}/scripts/marketplace/preview/`, { params: { name: name, path: path || currentMarketplacePath } });
+            marketplacePreviewData = response.data;
+            document.getElementById('marketplace-preview-title').textContent = '文件预览: ' + name;
+            document.getElementById('marketplace-preview-content').textContent = JSON.stringify(response.data, null, 2);
+            new bootstrap.Modal(document.getElementById('marketplacePreviewModal')).show();
+        } catch (error) {
+            showToast('预览失败', 'error');
+            console.error('Failed to preview:', error);
+        }
+    }
+    
+    async function importFromMarketplace() {
+        if (marketplaceSelectedFiles.size === 0) {
+            showToast('请至少选择一个动作集合', 'error');
+            return;
+        }
+        
+        const selectedItems = Array.from(marketplaceSelectedFiles).map(idx => marketplaceItems[idx]).filter(item => item && item.is_folder !== true);
+        
+        if (selectedItems.length === 0) {
+            showToast('请选择有效的文件', 'error');
+            return;
+        }
+        
+        try {
+            let allImportData = [];
+            
+            for (const item of selectedItems) {
+                try {
+                    const response = await axios.get(`${API_BASE}/scripts/marketplace/download/`, { params: { name: item.name, path: item._path || currentMarketplacePath } });
+                    if (!response.data) continue;
+                    
+                    if (Array.isArray(response.data)) {
+                        for (const entry of response.data) {
+                            if (typeof entry === 'object' && entry !== null && (entry.steps || entry.code)) {
+                                entry.group = null;
+                                allImportData.push(entry);
+                            }
+                        }
+                    } else if (typeof response.data === 'object') {
+                        if (response.data.steps || response.data.code) {
+                            response.data.group = null;
+                            allImportData.push(response.data);
+                        }
+                    }
+                } catch (err) {
+                    console.error('Failed to download ' + item.name + ':', err);
+                }
+            }
+            
+            if (allImportData.length === 0) {
+                showToast('没有可导入的数据', 'error');
+                return;
+            }
+            
+            const importResponse = await axios.post(`${API_BASE}/scripts/action-sets/import/`, allImportData);
+            const result = importResponse.data;
+            
+            let message = result.message;
+            if (result.errors && result.errors.length > 0) {
+                message += '\n错误详情: ' + result.errors.map(e => `${e.item}: ${e.error}`).join('\n');
+            }
+            
+            showToast(message);
+            bootstrap.Modal.getInstance(document.getElementById('marketplaceImportModal')).hide();
+            loadActionSets();
+        } catch (error) {
+            console.error('Failed to import:', error);
+            showToast('导入失败: ' + (error.response?.data?.error || error.message), 'error');
+        }
+    }
+    
+    async function loadUploadFolderList(path) {
+        uploadFolderPath = path;
+        document.getElementById('upload-current-path').value = path || '根目录';
+        const container = document.getElementById('upload-folder-list');
+        container.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary" role="status"></div></div>';
+        
+        try {
+            const response = await axios.get(`${API_BASE}/scripts/marketplace/items/`, { params: { path: path } });
+            const items = response.data || [];
+            const folders = items.filter(item => item.is_folder || (item.is_folder === undefined && !item.name.endsWith('.json')));
+            
+            if (folders.length === 0) {
+                container.innerHTML = '<div class="text-center text-muted py-3">当前目录下无文件夹</div>';
+            } else {
+                container.innerHTML = `
+                    <div class="list-group">
+                        ${folders.map(folder => `
+                            <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" onclick="selectUploadFolder('${folder.name}')">
+                                <span><i class="bi bi-folder text-warning me-2"></i>${folder.name}</span>
+                                <span class="badge bg-primary rounded-pill">选择</span>
+                            </button>
+                        `).join('')}
+                    </div>
+                `;
+            }
+        } catch (error) {
+            container.innerHTML = '<div class="text-center text-muted py-3">加载失败</div>';
+            console.error('Failed to load folder list:', error);
+        }
+    }
+    
+    function selectUploadFolder(folderName) {
+        const newPath = uploadFolderPath ? uploadFolderPath + '/' + folderName : folderName;
+        loadUploadFolderList(newPath);
+    }
+    
+    function navigateUp() {
+        if (!uploadFolderPath) return;
+        const parts = uploadFolderPath.split('/').filter(p => p);
+        parts.pop();
+        loadUploadFolderList(parts.join('/'));
+    }
+    
+    function openNewFolderDialog() {
+        document.getElementById('new-folder-name').value = '';
+        new bootstrap.Modal(document.getElementById('newFolderModal')).show();
+    }
+    
+    async function createNewFolder() {
+        const name = document.getElementById('new-folder-name').value.trim();
+        if (!name) {
+            showToast('请输入文件夹名称', 'error');
+            return;
+        }
+        
+        try {
+            await axios.post(`${API_BASE}/scripts/marketplace/folder/`, { name: name, path: uploadFolderPath });
+            bootstrap.Modal.getInstance(document.getElementById('newFolderModal')).hide();
+            showToast('文件夹创建成功');
+            loadUploadFolderList(uploadFolderPath);
+        } catch (error) {
+            showToast('创建失败: ' + (error.response?.data?.error || error.message), 'error');
+            console.error('Failed to create folder:', error);
+        }
+    }
+    
+    async function submitUpload() {
+        const filename = document.getElementById('upload-filename').value.trim();
+        if (!filename) {
+            showToast('请输入文件名', 'error');
+            return;
+        }
+        
+        if (!pendingSaveData) {
+            showToast('没有可上传的数据', 'error');
+            return;
+        }
+        
+        try {
+            await axios.post(`${API_BASE}/scripts/marketplace/upload/`, {
+                filename: filename.endsWith('.json') ? filename : filename + '.json',
+                path: uploadFolderPath,
+                content: pendingSaveData
+            });
+            bootstrap.Modal.getInstance(document.getElementById('uploadConfigModal')).hide();
+            showToast('上传成功');
+            pendingSaveData = null;
+        } catch (error) {
+            showToast('上传失败: ' + (error.response?.data?.error || error.message), 'error');
+            console.error('Failed to upload:', error);
+        }
+    }
+    
+    window.openMarketplaceImportModal = openMarketplaceImportModal;
+    window.searchMarketplace = searchMarketplace;
+    window.resetMarketplaceSearch = resetMarketplaceSearch;
+    window.previewMarketplaceFile = previewMarketplaceFile;
+    window.importFromMarketplace = importFromMarketplace;
+    window.toggleMarketplaceSelection = toggleMarketplaceSelection;
+    window.enterMarketplaceFolder = enterMarketplaceFolder;
+    window.navigateToMarketplacePath = navigateToMarketplacePath;
+    window.marketplaceNavigateUp = marketplaceNavigateUp;
+    window.handleRowClick = handleRowClick;
+    window.handleRowDblClick = handleRowDblClick;
+    window.skipUpload = skipUpload;
+    window.proceedUpload = proceedUpload;
+    window.uploadActionSet = uploadActionSet;
+    window.loadUploadFolderList = loadUploadFolderList;
+    window.selectUploadFolder = selectUploadFolder;
+    window.navigateUp = navigateUp;
+    window.openNewFolderDialog = openNewFolderDialog;
+    window.createNewFolder = createNewFolder;
+    window.submitUpload = submitUpload;
+
+    // 为搜索输入框添加带 composition 检查的 keydown 事件处理
+    (function() {
+        var searchInput = document.getElementById('marketplace-search');
+        if (searchInput) {
+            var isComposing = false;
+            searchInput.addEventListener('compositionstart', function() {
+                isComposing = true;
+            });
+            searchInput.addEventListener('compositionend', function() {
+                isComposing = false;
+            });
+            searchInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !isComposing) {
+                    e.preventDefault();
+                    searchMarketplace();
+                }
+            });
+        }
+    })();
+</script>
+{% endblock %}

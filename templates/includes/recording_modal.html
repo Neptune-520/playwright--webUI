@@ -1,0 +1,548 @@
+<link href="{% static 'css/recording_modal.css' %}" rel="stylesheet">
+
+<div class="modal fade" id="{{ modal_id }}" tabindex="-1" data-bs-focus="false">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-broadcast"></i> 录制操作</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="{{ modal_id }}-setup">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">目标网址</label>
+                        <div class="input-group">
+                            <input type="url" class="form-control" id="{{ modal_id }}-url"
+                                   placeholder="https://example.com" value="{{ default_url|default:'' }}">
+                            <button class="btn btn-danger" id="{{ modal_id }}-start-btn" onclick="recStart('{{ modal_id }}')">
+                                <i class="bi bi-record-circle"></i> 开始录制
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mb-3 mt-3">
+                        <label class="form-label fw-bold">窗口分辨率</label>
+                        <div class="d-flex gap-2 mb-2">
+                            <select class="form-select form-select-sm" id="{{ modal_id }}-resolution" onchange="recResolutionChange('{{ modal_id }}')">
+                                <option value="1920x1080">1920 × 1080 (全高清)</option>
+                                <option value="1366x768">1366 × 768</option>
+                                <option value="1280x720">1280 × 720 (720p)</option>
+                                <option value="custom">自定义</option>
+                            </select>
+                        </div>
+                        <div id="{{ modal_id }}-custom-resolution" style="display:none;" class="d-flex gap-2">
+                            <input type="number" class="form-control form-control-sm" id="{{ modal_id }}-custom-width" placeholder="宽度" min="800" value="1920">
+                            <span class="align-self-center">×</span>
+                            <input type="number" class="form-control form-control-sm" id="{{ modal_id }}-custom-height" placeholder="高度" min="600" value="1080">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="{{ modal_id }}-recording" style="display:none;">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="rec-dot"></span>
+                            <strong class="text-danger">录制中</strong>
+                            <span class="badge bg-secondary" id="{{ modal_id }}-count">0 个操作</span>
+                        </div>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="recStop('{{ modal_id }}')">
+                            <i class="bi bi-stop-circle"></i> 停止录制
+                        </button>
+                    </div>
+                    <div class="rec-actions-list" id="{{ modal_id }}-actions">
+                        <p class="text-muted text-center mb-0">等待操作...</p>
+                    </div>
+                </div>
+
+                <div id="{{ modal_id }}-result" style="display:none;">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="mb-0">录制结果 <span class="badge bg-primary" id="{{ modal_id }}-result-count">0</span></h6>
+                        <div>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="recRestart('{{ modal_id }}')">
+                                <i class="bi bi-arrow-repeat"></i> 重新录制
+                            </button>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2 mb-2">
+                        <button class="btn btn-sm btn-outline-primary" onclick="recAddRandomSelect('{{ modal_id }}')">
+                            <i class="bi bi-shuffle"></i> 添加随机选择
+                        </button>
+                        <button class="btn btn-sm btn-outline-primary" onclick="recAddRandomNumber('{{ modal_id }}')">
+                            <i class="bi bi-dice-5"></i> 添加随机数值
+                        </button>
+                    </div>
+                    <div class="rec-actions-list" id="{{ modal_id }}-result-actions"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="{{ modal_id }}-confirm-btn"
+                        onclick="recConfirm('{{ modal_id }}')" style="display:none;">
+                    <i class="bi bi-check-lg"></i> 确认导入
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="{{ modal_id }}-random-modal" tabindex="-1" data-bs-focus="false">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title" id="{{ modal_id }}-random-modal-title">添加随机操作</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="{{ modal_id }}-random-select-form" style="display:none;">
+                    <div class="mb-2">
+                        <label class="form-label small">元素名称</label>
+                        <input type="text" class="form-control form-control-sm" id="{{ modal_id }}-rs-name" placeholder="下拉框名称">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">定位类型</label>
+                        <select class="form-select form-select-sm" id="{{ modal_id }}-rs-locator-type">
+                            <option value="css">CSS选择器</option>
+                            <option value="xpath">XPath</option>
+                            <option value="id">ID</option>
+                            <option value="name">Name属性</option>
+                            <option value="text">文本内容</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">定位值</label>
+                        <input type="text" class="form-control form-control-sm" id="{{ modal_id }}-rs-locator-value" placeholder="定位值">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">选项列表（每行一个）</label>
+                        <textarea class="form-control form-control-sm" id="{{ modal_id }}-rs-options" rows="5" placeholder="选项1&#10;选项2&#10;选项3"></textarea>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">选择模式</label>
+                        <select class="form-select form-select-sm" id="{{ modal_id }}-rs-mode">
+                            <option value="dropdown">下拉框选择</option>
+                            <option value="click">点击卡片</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="{{ modal_id }}-random-number-form" style="display:none;">
+                    <div class="mb-2">
+                        <label class="form-label small">元素名称</label>
+                        <input type="text" class="form-control form-control-sm" id="{{ modal_id }}-rn-name" placeholder="输入框名称">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">定位类型</label>
+                        <select class="form-select form-select-sm" id="{{ modal_id }}-rn-locator-type">
+                            <option value="css">CSS选择器</option>
+                            <option value="xpath">XPath</option>
+                            <option value="id">ID</option>
+                            <option value="name">Name属性</option>
+                            <option value="text">文本内容</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">定位值</label>
+                        <input type="text" class="form-control form-control-sm" id="{{ modal_id }}-rn-locator-value" placeholder="定位值">
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-6">
+                            <label class="form-label small">最小值</label>
+                            <input type="number" class="form-control form-control-sm" id="{{ modal_id }}-rn-min" value="0">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small">最大值</label>
+                            <input type="number" class="form-control form-control-sm" id="{{ modal_id }}-rn-max" value="100">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="recConfirmRandom('{{ modal_id }}')">确认添加</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    var _recData = {};
+    var _modalId = '{{ modal_id }}';
+
+    window.getRecData = function(modalId) {
+        if (!_recData[modalId]) {
+            _recData[modalId] = { sessionId: null, actions: [], pollTimer: null, confirmed: false };
+        }
+        return _recData[modalId];
+    };
+
+    window.recResolutionChange = function(modalId) {
+        var sel = document.getElementById(modalId + '-resolution');
+        var customDiv = document.getElementById(modalId + '-custom-resolution');
+        customDiv.style.display = sel.value === 'custom' ? 'flex' : 'none';
+    };
+
+    window.recAddRandomSelect = function(modalId) {
+        document.getElementById(modalId + '-random-modal-title').textContent = '添加随机选择';
+        document.getElementById(modalId + '-random-select-form').style.display = 'block';
+        document.getElementById(modalId + '-random-number-form').style.display = 'none';
+        document.getElementById(modalId + '-rs-name').value = '';
+        document.getElementById(modalId + '-rs-locator-value').value = '';
+        document.getElementById(modalId + '-rs-options').value = '';
+        new bootstrap.Modal(document.getElementById(modalId + '-random-modal')).show();
+    };
+
+    window.recAddRandomNumber = function(modalId) {
+        document.getElementById(modalId + '-random-modal-title').textContent = '添加随机数值';
+        document.getElementById(modalId + '-random-select-form').style.display = 'none';
+        document.getElementById(modalId + '-random-number-form').style.display = 'block';
+        document.getElementById(modalId + '-rn-name').value = '';
+        document.getElementById(modalId + '-rn-locator-value').value = '';
+        document.getElementById(modalId + '-rn-min').value = '0';
+        document.getElementById(modalId + '-rn-max').value = '100';
+        new bootstrap.Modal(document.getElementById(modalId + '-random-modal')).show();
+    };
+
+    window.recConfirmRandom = function(modalId) {
+        var data = window.getRecData(modalId);
+        var titleEl = document.getElementById(modalId + '-random-modal-title');
+        var isSelect = titleEl.textContent.indexOf('随机选择') >= 0;
+
+        if (isSelect) {
+            var name = document.getElementById(modalId + '-rs-name').value || '随机选择';
+            var locatorType = document.getElementById(modalId + '-rs-locator-type').value;
+            var locatorValue = document.getElementById(modalId + '-rs-locator-value').value;
+            var optionsText = document.getElementById(modalId + '-rs-options').value;
+            var mode = document.getElementById(modalId + '-rs-mode').value;
+            var options = optionsText.split('\n').filter(function(o) { return o.trim(); });
+
+            if (options.length === 0) {
+                showToast('请至少输入一个选项', 'error');
+                return;
+            }
+
+            var action = {
+                action_type: 'random_select',
+                element_info: locatorValue ? { tag: 'select' } : null,
+                value: '',
+                description: name,
+                locators: locatorValue ? [{ locator_type: locatorType, locator_value: locatorValue, locator_description: name }] : [],
+                random_options: options,
+                select_mode: mode
+            };
+            data.actions.push(action);
+        } else {
+            var name = document.getElementById(modalId + '-rn-name').value || '随机数值';
+            var locatorType = document.getElementById(modalId + '-rn-locator-type').value;
+            var locatorValue = document.getElementById(modalId + '-rn-locator-value').value;
+            var minVal = parseInt(document.getElementById(modalId + '-rn-min').value) || 0;
+            var maxVal = parseInt(document.getElementById(modalId + '-rn-max').value) || 100;
+
+            var action = {
+                action_type: 'random_number',
+                element_info: locatorValue ? { tag: 'input' } : null,
+                value: '',
+                description: name,
+                locators: locatorValue ? [{ locator_type: locatorType, locator_value: locatorValue, locator_description: name }] : [],
+                random_min: minVal,
+                random_max: maxVal
+            };
+            data.actions.push(action);
+        }
+
+        bootstrap.Modal.getInstance(document.getElementById(modalId + '-random-modal')).hide();
+
+        var resultEl = document.getElementById(modalId + '-result');
+        var isResultView = resultEl && resultEl.style.display !== 'none';
+        if (isResultView) {
+            renderRecActions(modalId, modalId + '-result-actions', data.actions, true);
+            document.getElementById(modalId + '-result-count').textContent = data.actions.length;
+        }
+        document.getElementById(modalId + '-confirm-btn').style.display = data.actions.length > 0 ? 'inline-block' : 'none';
+    };
+
+    window.recStart = function(modalId) {
+        var url = document.getElementById(modalId + '-url').value.trim();
+        if (!url) { showToast('请输入目标网址', 'error'); return; }
+
+        var data = window.getRecData(modalId);
+        var startBtn = document.getElementById(modalId + '-start-btn');
+        startBtn.disabled = true;
+        startBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 启动中...';
+
+        var resSel = document.getElementById(modalId + '-resolution');
+        var resValue = resSel ? resSel.value : '1920x1080';
+        var vpWidth, vpHeight;
+        if (resValue === 'custom') {
+            vpWidth = parseInt(document.getElementById(modalId + '-custom-width').value) || 1920;
+            vpHeight = parseInt(document.getElementById(modalId + '-custom-height').value) || 1080;
+        } else {
+            var parts = resValue.split('x');
+            vpWidth = parseInt(parts[0]) || 1920;
+            vpHeight = parseInt(parts[1]) || 1080;
+        }
+
+        axios.post(API_BASE + '/scripts/recording/start/', {
+            target_url: url,
+            viewport_width: vpWidth,
+            viewport_height: vpHeight
+        })
+            .then(function(resp) {
+                data.sessionId = resp.data.session_id;
+                document.getElementById(modalId + '-setup').style.display = 'none';
+                document.getElementById(modalId + '-recording').style.display = 'block';
+                data.pollTimer = setInterval(function() { recPoll(modalId); }, 1000);
+            })
+            .catch(function(err) {
+                showToast(err.response?.data?.error || '启动录制失败', 'error');
+                startBtn.disabled = false;
+                startBtn.innerHTML = '<i class="bi bi-record-circle"></i> 开始录制';
+            });
+    };
+
+    window.recPoll = function(modalId) {
+        var data = window.getRecData(modalId);
+        if (!data.sessionId) return;
+
+        axios.get(API_BASE + '/scripts/recording/' + data.sessionId + '/actions/')
+            .then(function(resp) {
+                data.actions = resp.data.actions || [];
+                document.getElementById(modalId + '-count').textContent = data.actions.length + ' 个操作';
+                renderRecActions(modalId, modalId + '-actions', data.actions, false);
+
+                if (resp.data.status === 'stopped' || resp.data.status === 'error') {
+                    clearInterval(data.pollTimer);
+                    data.pollTimer = null;
+                    if (resp.data.status === 'error') {
+                        showToast('录制出错: ' + (resp.data.error || ''), 'error');
+                    }
+                    recShowResult(modalId);
+                }
+            })
+            .catch(function() {});
+    };
+
+    window.recStop = function(modalId) {
+        var data = window.getRecData(modalId);
+        if (!data.sessionId) return;
+
+        if (data.pollTimer) { clearInterval(data.pollTimer); data.pollTimer = null; }
+
+        axios.post(API_BASE + '/scripts/recording/' + data.sessionId + '/stop/')
+            .then(function(resp) {
+                data.actions = resp.data.actions || [];
+                recShowResult(modalId);
+            })
+            .catch(function(err) {
+                showToast('停止录制失败', 'error');
+            });
+    };
+
+    window.recShowResult = function(modalId) {
+        var data = window.getRecData(modalId);
+        document.getElementById(modalId + '-recording').style.display = 'none';
+        document.getElementById(modalId + '-result').style.display = 'block';
+        document.getElementById(modalId + '-result-count').textContent = data.actions.length;
+        document.getElementById(modalId + '-confirm-btn').style.display = data.actions.length > 0 ? 'inline-block' : 'none';
+        renderRecActions(modalId, modalId + '-result-actions', data.actions, true);
+    };
+
+    window.recRestart = function(modalId) {
+        var data = window.getRecData(modalId);
+        if (data.pollTimer) { clearInterval(data.pollTimer); data.pollTimer = null; }
+        if (data.sessionId) {
+            axios.post(API_BASE + '/scripts/recording/' + data.sessionId + '/stop/').catch(function(){});
+        }
+        data.sessionId = null;
+        data.actions = [];
+        document.getElementById(modalId + '-setup').style.display = 'block';
+        document.getElementById(modalId + '-recording').style.display = 'none';
+        document.getElementById(modalId + '-result').style.display = 'none';
+        document.getElementById(modalId + '-confirm-btn').style.display = 'none';
+        var startBtn = document.getElementById(modalId + '-start-btn');
+        startBtn.disabled = false;
+        startBtn.innerHTML = '<i class="bi bi-record-circle"></i> 开始录制';
+    };
+
+    window.recRemoveAction = function(modalId, index) {
+        var data = window.getRecData(modalId);
+        if (!data) return;
+        data.actions.splice(index, 1);
+
+        var recordingEl = document.getElementById(modalId + '-recording');
+        var resultEl = document.getElementById(modalId + '-result');
+        var isResultView = resultEl && resultEl.style.display !== 'none';
+
+        if (isResultView) {
+            renderRecActions(modalId, modalId + '-result-actions', data.actions, true);
+            document.getElementById(modalId + '-result-count').textContent = data.actions.length;
+        } else {
+            renderRecActions(modalId, modalId + '-actions', data.actions, false);
+            document.getElementById(modalId + '-count').textContent = data.actions.length + ' 个操作';
+        }
+
+        document.getElementById(modalId + '-confirm-btn').style.display = data.actions.length > 0 ? 'inline-block' : 'none';
+    };
+
+    window.recEditLocator = function(modalId, actionIdx, locIdx) {
+        var data = window.getRecData(modalId);
+        if (!data || !data.actions || !data.actions[actionIdx]) return;
+        var action = data.actions[actionIdx];
+        if (!action.locators || !action.locators[locIdx]) return;
+        var loc = action.locators[locIdx];
+
+        var elId = 'loc-' + modalId + '-' + actionIdx + '-' + locIdx;
+        var el = document.getElementById(elId);
+        if (!el) return;
+
+        var currentType = loc.locator_type || 'css';
+        var currentValue = loc.locator_value || '';
+
+        var locatorTypes = ['css','xpath','id','name','class_name','text','placeholder','label','role','test_id'];
+        var typeOptions = locatorTypes.map(function(t) {
+            return '<option value="' + t + '"' + (t === currentType ? ' selected' : '') + '>' + t + '</option>';
+        }).join('');
+
+        el.innerHTML = '<div class="rec-locator-edit-form">'
+            + '<select class="rec-locator-edit-input" id="' + elId + '-type">' + typeOptions + '</select>'
+            + '<input type="text" class="rec-locator-edit-value" id="' + elId + '-value" value="' + currentValue.replace(/"/g, '&quot;') + '">'
+            + '</div>';
+
+        var typeInput = document.getElementById(elId + '-type');
+        var valueInput = document.getElementById(elId + '-value');
+
+        var saved = false;
+        function save() {
+            if (saved) return;
+            saved = true;
+            loc.locator_type = typeInput.value;
+            loc.locator_value = valueInput.value;
+            var resultEl = document.getElementById(modalId + '-result');
+            var isResultView = resultEl && resultEl.style.display !== 'none';
+            if (isResultView) {
+                renderRecActions(modalId, modalId + '-result-actions', data.actions, true);
+            }
+        }
+
+        valueInput.isComposing = false;
+        valueInput.addEventListener('compositionstart', function(e) {
+            valueInput.isComposing = true;
+        });
+        valueInput.addEventListener('compositionend', function(e) {
+            valueInput.isComposing = false;
+        });
+        valueInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                if (!valueInput.isComposing) {
+                    e.preventDefault();
+                    save();
+                }
+            }
+            if (e.key === 'Escape') { saved = true; renderRecActions(modalId, modalId + '-result-actions', data.actions, true); }
+        });
+        valueInput.addEventListener('blur', save);
+        valueInput.focus();
+    };
+
+    window.recRemoveLocator = function(modalId, actionIdx, locIdx) {
+        var data = window.getRecData(modalId);
+        if (!data || !data.actions || !data.actions[actionIdx]) return;
+        var action = data.actions[actionIdx];
+        if (!action.locators || action.locators.length <= 1) return;
+        action.locators.splice(locIdx, 1);
+        var resultEl = document.getElementById(modalId + '-result');
+        var isResultView = resultEl && resultEl.style.display !== 'none';
+        if (isResultView) {
+            renderRecActions(modalId, modalId + '-result-actions', data.actions, true);
+        }
+    };
+
+    window.recAddLocator = function(modalId, actionIdx) {
+        var data = window.getRecData(modalId);
+        if (!data || !data.actions || !data.actions[actionIdx]) return;
+        var action = data.actions[actionIdx];
+        if (!action.locators) action.locators = [];
+        action.locators.push({
+            locator_type: 'css',
+            locator_value: '',
+            locator_description: ''
+        });
+        var resultEl = document.getElementById(modalId + '-result');
+        var isResultView = resultEl && resultEl.style.display !== 'none';
+        if (isResultView) {
+            renderRecActions(modalId, modalId + '-result-actions', data.actions, true);
+            setTimeout(function() {
+                recEditLocator(modalId, actionIdx, action.locators.length - 1);
+            }, 100);
+        }
+    };
+
+    function escHtml(s) {
+        var d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    function renderRecActions(modalId, containerId, actions, showDelete) {
+        var container = document.getElementById(containerId);
+        if (!container) return;
+        if (!actions || actions.length === 0) {
+            container.innerHTML = '<p class="text-muted text-center mb-0">暂无操作</p>';
+            return;
+        }
+        var typeIcons = {
+            click: 'bi-cursor', fill: 'bi-input-cursor-text', select: 'bi-menu-down',
+            check: 'bi-check-square', uncheck: 'bi-square', press: 'bi-keyboard',
+            scroll: 'bi-arrows-expand', navigate: 'bi-globe', hover: 'bi-hand-index',
+            random_select: 'bi-shuffle', random_number: 'bi-dice-5'
+        };
+        container.innerHTML = actions.map(function(a, i) {
+            var icon = typeIcons[a.action_type] || 'bi-gear';
+            var delBtn = showDelete
+                ? '<button class="rec-action-del" onclick="recRemoveAction(\'' + modalId + '\',' + i + ')" title="删除"><i class="bi bi-x"></i></button>'
+                : '';
+            var locatorHtml = '';
+            if (a.locators && a.locators.length > 0) {
+                locatorHtml = '<div class="rec-locator-info">';
+                a.locators.forEach(function(loc, locIdx) {
+                    var cls = locIdx === 0 ? 'rec-locator-primary' : 'rec-locator-backup';
+                    var badge = locIdx === 0 ? '' : '<span class="rec-locator-badge">备用' + locIdx + '</span>';
+                    var editBtn = showDelete
+                        ? '<button class="rec-locator-edit" onclick="recEditLocator(\'' + modalId + '\',' + i + ',' + locIdx + ')" title="编辑"><i class="bi bi-pencil"></i></button>'
+                        : '';
+                    var delBtn = (showDelete && a.locators.length > 1)
+                        ? '<button class="rec-locator-edit" onclick="recRemoveLocator(\'' + modalId + '\',' + i + ',' + locIdx + ')" title="删除"><i class="bi bi-x"></i></button>'
+                        : '';
+                    locatorHtml += '<div class="' + cls + '" id="loc-' + modalId + '-' + i + '-' + locIdx + '">'
+                        + badge
+                        + '<span class="rec-locator-text">' + (loc.locator_type || 'css').toUpperCase() + ': ' + (loc.locator_value || '') + '</span>'
+                        + editBtn + delBtn
+                        + '</div>';
+                });
+                if (showDelete) {
+                    locatorHtml += '<button class="rec-locator-add" onclick="recAddLocator(\'' + modalId + '\',' + i + ')" title="添加定位器"><i class="bi bi-plus-circle"></i></button>';
+                }
+                locatorHtml += '</div>';
+            }
+            return '<div class="rec-action-item">' +
+                '<span class="rec-action-num">' + (i + 1) + '</span>' +
+                '<i class="bi ' + icon + ' rec-action-type"></i>' +
+                '<div class="rec-action-content">' +
+                '<span class="rec-action-desc">' + (a.description || a.action_type) + '</span>' +
+                locatorHtml +
+                '</div>' +
+                delBtn +
+                '</div>';
+        }).join('');
+    }
+
+    var origModal = document.getElementById(_modalId);
+    if (origModal) {
+        origModal.addEventListener('hidden.bs.modal', function() {
+            var data = window.getRecData(_modalId);
+            if (data.pollTimer) { clearInterval(data.pollTimer); data.pollTimer = null; }
+            if (data.sessionId && !data.confirmed) {
+                axios.post(API_BASE + '/scripts/recording/' + data.sessionId + '/stop/').catch(function(){});
+            }
+        });
+    }
+})();
+</script>

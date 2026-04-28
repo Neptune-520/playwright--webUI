@@ -1,0 +1,194 @@
+.editor-container {
+    min-height: calc(100vh - 100px);
+}
+
+.script-info-bar {
+    background: white;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.script-info-bar .row {
+    align-items: end;
+}
+
+.step-card {
+    background: white;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    transition: all 0.2s;
+}
+
+.step-card:hover {
+    border-color: var(--primary-color);
+}
+
+.step-card.active {
+    border-color: var(--primary-color);
+}
+
+.step-card .step-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 15px;
+    cursor: pointer;
+}
+
+.step-card .step-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+}
+
+.step-card .step-number {
+    width: 28px;
+    height: 28px;
+    background-color: var(--primary-color);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+.step-card .step-actions {
+    display: flex;
+    gap: 5px;
+    flex-shrink: 0;
+}
+
+.step-card .step-actions button {
+    padding: 3px 8px;
+    font-size: 0.8rem;
+}
+
+.step-config-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s ease;
+}
+
+.step-card.active .step-config-body {
+    max-height: 2000px;
+}
+
+.step-config-content {
+    padding: 0 15px 15px 15px;
+    border-top: 1px solid #e9ecef;
+}
+
+.action-type-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.action-type-btn-sm {
+    padding: 4px 10px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    background: white;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.action-type-btn-sm:hover {
+    border-color: var(--primary-color);
+    background-color: #f8f9fa;
+}
+
+.action-type-btn-sm.selected {
+    border-color: var(--primary-color);
+    background-color: #e7f1ff;
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+.locator-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.locator-row select {
+    width: 140px;
+    flex-shrink: 0;
+}
+
+.locator-row input {
+    flex: 1;
+    min-width: 0;
+}
+
+.config-field {
+    margin-bottom: 10px;
+}
+
+.config-field label {
+    font-size: 0.85rem;
+    margin-bottom: 4px;
+    display: block;
+}
+
+.config-row {
+    display: flex;
+    gap: 10px;
+}
+
+.config-row > div {
+    flex: 1;
+}
+
+.drop-zone {
+    border: 2px dashed #dee2e6;
+    border-radius: 8px;
+    padding: 30px;
+    text-align: center;
+    color: #6c757d;
+    margin-bottom: 15px;
+}
+
+.drop-zone.drag-over {
+    border-color: var(--primary-color);
+    background-color: #f0f7ff;
+}
+
+.script-list-item {
+    padding: 10px 15px;
+    cursor: pointer;
+    border-bottom: 1px solid #eee;
+}
+
+.script-list-item:hover {
+    background-color: #f8f9fa;
+}
+
+.script-list-item.selected {
+    background-color: #e7f1ff;
+}
+
+.step-summary {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.expand-icon {
+    transition: transform 0.3s ease;
+}
+
+.step-card.active .expand-icon {
+    transform: rotate(180deg);
+}

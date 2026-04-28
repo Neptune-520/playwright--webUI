@@ -1,0 +1,440 @@
+let tasks = [];
+let scripts = [];
+let selectedTaskId = null;
+let groups = [];
+let currentPage = 1;
+let selectedTaskIds = new Set();
+
+async function loadGroups() {
+    try {
+        const response = await axios.get(`${API_BASE}/core/groups/?type=task`);
+        groups = response.data || [];
+        const select = document.getElementById('task-group');
+        select.innerHTML = '<option value="">无分组</option>' + 
+            groups.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+    } catch (error) {
+        console.error('Failed to load groups:', error);
+    }
+}
+
+async function loadTasks() {
+    try {
+        const response = await axios.get(`${API_BASE}/tests/tasks/`);
+        tasks = response.data;
+        renderTasks();
+    } catch (error) {
+        console.error('Failed to load tasks:', error);
+        showToast('加载任务失败', 'error');
+    }
+}
+
+async function loadScripts() {
+    try {
+        const response = await axios.get(`${API_BASE}/scripts/`);
+        scripts = response.data;
+        renderScriptsCheckboxList();
+    } catch (error) {
+        console.error('Failed to load scripts:', error);
+    }
+}
+
+function renderScriptsCheckboxList(filter = '') {
+    const container = document.getElementById('scripts-checkbox-list');
+    
+    if (scripts.length === 0) {
+        container.innerHTML = '<div class="text-muted">暂无可用脚本</div>';
+        return;
+    }
+    
+    const filteredScripts = filter
+        ? scripts.filter(script => 
+            script.name.toLowerCase().includes(filter.toLowerCase()) ||
+            script.code.toLowerCase().includes(filter.toLowerCase())
+        )
+        : scripts;
+    
+    if (filteredScripts.length === 0) {
+        container.innerHTML = '<div class="text-muted">暂无匹配脚本</div>';
+        return;
+    }
+    
+    container.innerHTML = filteredScripts.map(script => `
+        <div class="form-check">
+            <input class="form-check-input script-checkbox" type="checkbox" value="${script.id}" id="create-script-${script.id}">
+            <label class="form-check-label" for="create-script-${script.id}">
+                ${script.name} <small class="text-muted">(${script.code})</small>
+            </label>
+        </div>
+    `).join('');
+    
+    document.querySelectorAll('.script-checkbox').forEach(cb => {
+        cb.addEventListener('change', updateSelectedScriptCount);
+    });
+}
+
+function updateSelectedScriptCount() {
+    const count = document.querySelectorAll('.script-checkbox:checked').length;
+    document.getElementById('selected-script-count').textContent = `已选择 ${count} 个脚本`;
+}
+
+function renderTasks() {
+    const keyword = document.getElementById('task-search').value.toLowerCase();
+    const statusFilter = document.getElementById('task-status-filter').value;
+    const pageSize = parseInt(document.getElementById('task-page-size').value);
+    const tbody = document.getElementById('tasks-table');
+    const countEl = document.getElementById('task-count');
+    
+    let filtered = tasks.filter(t => {
+        const matchKeyword = !keyword || t.name.toLowerCase().includes(keyword);
+        const matchStatus = !statusFilter || t.status === statusFilter;
+        return matchKeyword && matchStatus;
+    });
+    
+    if (tasks.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">暂无数据</td></tr>';
+        countEl.textContent = '';
+        return;
+    }
+    
+    const total = filtered.length;
+    const start = (currentPage - 1) * pageSize + 1;
+    const end = Math.min(currentPage * pageSize, total);
+    countEl.textContent = `显示 ${start}-${end}/${total} 条`;
+    
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">无匹配结果</td></tr>';
+        return;
+    }
+    
+    const pageData = filtered.slice(start - 1, end);
+    
+    tbody.innerHTML = pageData.map(task => {
+        const isChecked = selectedTaskIds.has(task.id) ? 'checked' : '';
+        
+        const scriptCount = task.script_count || 1;
+        let scriptsCell = '';
+        if (scriptCount === 1) {
+            scriptsCell = task.task_scripts && task.task_scripts.length > 0 
+                ? task.task_scripts[0].script_name 
+                : (task.script_name || '-');
+        } else {
+            scriptsCell = `
+                <span class="badge bg-primary">${scriptCount}个脚本</span>
+                <button class="btn btn-sm btn-link p-0 ms-1" onclick="showScriptList(${task.id})">详情</button>
+            `;
+        }
+        
+        return `
+        <tr>
+            <td><input type="checkbox" class="task-row-checkbox" data-task-id="${task.id}" ${isChecked} onchange="toggleTaskSelection(${task.id})"></td>
+            <td>${task.id}</td>
+            <td>${task.name}</td>
+            <td class="text-center"><span class="badge bg-secondary">${scriptCount}</span></td>
+            <td>${scriptsCell}</td>
+            <td>${getStatusBadge(task.status)}</td>
+            <td>${formatDate(task.created_at)}</td>
+            <td>${formatDate(task.started_at)}</td>
+            <td>${formatDate(task.finished_at)}</td>
+            <td class="action-buttons">
+                ${task.status === 'pending' ? `
+                    <button class="btn btn-success btn-sm" onclick="showExecuteModal(${task.id})">
+                        <i class="bi bi-play"></i> 执行
+                    </button>
+                ` : ''}
+                ${task.status === 'running' ? `
+                    <button class="btn btn-danger btn-sm" onclick="stopTask(${task.id})">
+                        <i class="bi bi-stop"></i> 停止
+                    </button>
+                ` : ''}
+                ${task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled' ? `
+                    <button class="btn btn-success btn-sm" onclick="showExecuteModal(${task.id})">
+                        <i class="bi bi-arrow-repeat"></i> 重新执行
+                    </button>
+                    <button class="btn btn-info btn-sm" onclick="viewResult(${task.id})">
+                        <i class="bi bi-eye"></i> 结果
+                    </button>
+                ` : ''}
+                <button class="btn btn-outline-secondary btn-sm" onclick="deleteTask(${task.id})">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </td>
+        </tr>
+    `}).join('');
+    
+    updateBatchExecuteButton();
+}
+
+function showScriptList(taskId) {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task || !task.task_scripts) return;
+    
+    const scriptNames = task.task_scripts.map(ts => `
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span>${ts.script_name}</span>
+            <span class="badge bg-light text-dark">顺序: ${ts.order + 1}</span>
+        </li>
+    `).join('');
+    
+    document.getElementById('script-list-body').innerHTML = `
+        <ul class="list-group">${scriptNames}</ul>
+    `;
+    
+    new bootstrap.Modal(document.getElementById('scriptListModal')).show();
+}
+
+function toggleSelectAll() {
+    const allChecked = document.getElementById('select-all-tasks').checked;
+    const keyword = document.getElementById('task-search').value.toLowerCase();
+    const statusFilter = document.getElementById('task-status-filter').value;
+    
+    let filtered = tasks.filter(t => {
+        const matchKeyword = !keyword || t.name.toLowerCase().includes(keyword);
+        const matchStatus = !statusFilter || t.status === statusFilter;
+        return matchKeyword && matchStatus;
+    });
+    
+    if (allChecked) {
+        filtered.forEach(t => selectedTaskIds.add(t.id));
+    } else {
+        filtered.forEach(t => selectedTaskIds.delete(t.id));
+    }
+    renderTasks();
+}
+
+function toggleTaskSelection(taskId) {
+    if (selectedTaskIds.has(taskId)) {
+        selectedTaskIds.delete(taskId);
+    } else {
+        selectedTaskIds.add(taskId);
+    }
+    updateBatchExecuteButton();
+    
+    const allCheckboxes = document.querySelectorAll('.task-row-checkbox');
+    const checkedBoxes = document.querySelectorAll('.task-row-checkbox:checked');
+    document.getElementById('select-all-tasks').checked = allCheckboxes.length > 0 && allCheckboxes.length === checkedBoxes.length;
+}
+
+function updateBatchExecuteButton() {
+    const btn = document.getElementById('btn-batch-execute');
+    const countEl = document.getElementById('batch-count');
+    
+    if (selectedTaskIds.size > 0) {
+        btn.style.display = 'inline-block';
+        countEl.textContent = `(${selectedTaskIds.size})`;
+    } else {
+        btn.style.display = 'none';
+    }
+}
+
+async function batchExecuteSelected() {
+    if (selectedTaskIds.size === 0) {
+        showToast('请至少选择一个任务', 'error');
+        return;
+    }
+    
+    const taskIds = Array.from(selectedTaskIds);
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (const taskId of taskIds) {
+        try {
+            await axios.post(`${API_BASE}/tests/tasks/${taskId}/execute/`, { parameters: {} });
+            successCount++;
+        } catch (error) {
+            console.error(`Failed to execute task ${taskId}:`, error);
+            failCount++;
+        }
+    }
+    
+    showToast(`批量执行完成：成功 ${successCount} 个，失败 ${failCount} 个`);
+    selectedTaskIds.clear();
+    loadTasks();
+}
+
+function resetTaskSearch() {
+    document.getElementById('task-search').value = '';
+    document.getElementById('task-status-filter').value = '';
+    currentPage = 1;
+    renderTasks();
+}
+
+document.getElementById('task-search').addEventListener('input', renderTasks);
+document.getElementById('task-status-filter').addEventListener('change', renderTasks);
+document.getElementById('task-page-size').addEventListener('change', () => { currentPage = 1; renderTasks(); });
+
+document.getElementById('script-search-input').addEventListener('input', function(e) {
+    renderScriptsCheckboxList(e.target.value);
+});
+
+async function createTask() {
+    const name = document.getElementById('task-name').value;
+    const scheduled = document.getElementById('task-scheduled').value;
+    const group = document.getElementById('task-group').value;
+    
+    const selectedScripts = [];
+    document.querySelectorAll('.script-checkbox:checked').forEach(cb => {
+        selectedScripts.push(parseInt(cb.value));
+    });
+    
+    if (!name) {
+        showToast('请填写任务名称', 'error');
+        return;
+    }
+    
+    if (selectedScripts.length === 0) {
+        showToast('请至少选择一个脚本', 'error');
+        return;
+    }
+    
+    try {
+        await axios.post(`${API_BASE}/tests/tasks/`, {
+            name: name,
+            scripts: selectedScripts,
+            scheduled_time: scheduled || null,
+            group: group || null,
+        });
+        
+        bootstrap.Modal.getInstance(document.getElementById('createModal')).hide();
+        resetCreateModal();
+        
+        showToast(`成功创建任务（${selectedScripts.length}个脚本）`);
+    } catch (error) {
+        console.error('Failed to create task:', error);
+        showToast('创建失败', 'error');
+    }
+    
+    loadTasks();
+}
+
+function resetCreateModal() {
+    document.getElementById('task-name').value = '';
+    document.getElementById('task-scheduled').value = '';
+    document.getElementById('task-group').value = '';
+    document.querySelectorAll('.script-checkbox').forEach(cb => cb.checked = false);
+    updateSelectedScriptCount();
+}
+
+document.getElementById('createModal').addEventListener('hidden.bs.modal', function() {
+    resetCreateModal();
+});
+
+function showExecuteModal(taskId) {
+    selectedTaskId = taskId;
+    const task = tasks.find(t => t.id === taskId);
+    
+    const scriptId = task.script;
+    const script = scripts.find(s => s.id === scriptId);
+    const parameters = script?.script_data?.parameters || [];
+    
+    const container = document.getElementById('task-parameters');
+    if (parameters.length === 0) {
+        container.innerHTML = '<p class="text-muted">此脚本无需参数</p>';
+    } else {
+        container.innerHTML = parameters.map(p => `
+            <div class="mb-2">
+                <label class="form-label">${p.name}</label>
+                <input type="text" class="form-control" name="param_${p.code}" 
+                       value="${p.default_value || ''}" placeholder="${p.placeholder || ''}">
+            </div>
+        `).join('');
+    }
+    
+    const uploadKey = 'exec_upload_' + taskId;
+    const emailKey = 'exec_email_' + taskId;
+    
+    const savedUpload = localStorage.getItem(uploadKey);
+    const uploadCheckbox = document.getElementById('exec-upload-to-management');
+    if (savedUpload !== null) {
+        uploadCheckbox.checked = savedUpload === 'true';
+    } else {
+        uploadCheckbox.checked = task.upload_to_management || false;
+    }
+    
+    const savedEmail = localStorage.getItem(emailKey);
+    const emailCheckbox = document.getElementById('exec-send-email');
+    if (savedEmail !== null) {
+        emailCheckbox.checked = savedEmail === 'true';
+    } else {
+        emailCheckbox.checked = task.send_email || false;
+    }
+    
+    axios.get(`${API_BASE}/scripts/global-config/`)
+        .then(response => {
+            const config = response.data;
+            if (config.email_enable) {
+                document.getElementById('exec-email-check-container').style.display = 'block';
+            } else {
+                document.getElementById('exec-email-check-container').style.display = 'none';
+            }
+        })
+        .catch(() => {
+            document.getElementById('exec-email-check-container').style.display = 'none';
+        });
+    
+    new bootstrap.Modal(document.getElementById('executeModal')).show();
+}
+
+async function executeTask() {
+    const inputs = document.querySelectorAll('#task-parameters input');
+    const parameters = {};
+    inputs.forEach(input => {
+        const code = input.name.replace('param_', '');
+        parameters[code] = input.value;
+    });
+    
+    const uploadToManagement = document.getElementById('exec-upload-to-management').checked;
+    const sendEmail = document.getElementById('exec-send-email').checked;
+    
+    const uploadKey = 'exec_upload_' + selectedTaskId;
+    const emailKey = 'exec_email_' + selectedTaskId;
+    localStorage.setItem(uploadKey, uploadToManagement.toString());
+    localStorage.setItem(emailKey, sendEmail.toString());
+    
+    try {
+        await axios.post(`${API_BASE}/tests/tasks/${selectedTaskId}/execute/`, {
+            parameters: parameters,
+            upload_to_management: uploadToManagement,
+            send_email: sendEmail
+        });
+        bootstrap.Modal.getInstance(document.getElementById('executeModal')).hide();
+        showToast('任务开始执行');
+        loadTasks();
+    } catch (error) {
+        console.error('Failed to execute task:', error);
+        showToast('执行失败', 'error');
+    }
+}
+
+async function stopTask(taskId) {
+    if (!confirm('确定停止此任务？')) return;
+    
+    try {
+        await axios.post(`${API_BASE}/tests/tasks/${taskId}/stop/`);
+        showToast('任务已停止');
+        loadTasks();
+    } catch (error) {
+        console.error('Failed to stop task:', error);
+        showToast('停止失败', 'error');
+    }
+}
+
+function viewResult(taskId) {
+    window.location.href = `/results/${taskId}/`;
+}
+
+async function deleteTask(taskId) {
+    if (!confirm('确定删除此任务？')) return;
+    
+    try {
+        await axios.delete(`${API_BASE}/tests/tasks/${taskId}/`);
+        showToast('任务已删除');
+        loadTasks();
+    } catch (error) {
+        console.error('Failed to delete task:', error);
+        showToast('删除失败', 'error');
+    }
+}
+
+loadGroups();
+loadTasks();
+loadScripts();

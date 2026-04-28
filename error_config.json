@@ -1,0 +1,16 @@
+[
+  {
+    "id": 1,
+    "name": "通用_执行终止跳过其余步骤",
+    "pattern": "(Skipped due to previous failure|由于之前的失败而跳过)",
+    "message_template": "由于之前的失败而跳过",
+    "action_type": ""
+  },
+  {
+    "id": 2,
+    "name": "导航步骤出错",
+    "pattern": "Locator\\.count: Unexpected token \"\" while parsing css selector \"\"",
+    "message_template": "步骤的操作类型是否选择正确？如导航的操作类型被设置为点击操作？",
+    "action_type": ""
+  }
+]

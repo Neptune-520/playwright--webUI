@@ -1,0 +1,40 @@
+{
+  "name": "购物网站下单流程自动化测试平台",
+  "version": "1.0.0",
+  "description": "基于Playwright和Django的自动化测试平台，支持可视化脚本编辑和参数化测试",
+  "main_features": [
+    "可视化脚本编辑器 - 无需编写代码即可创建测试脚本",
+    "产品参数配置 - 支持不同产品类型的参数化测试",
+    "测试任务管理 - 创建、执行、监控测试任务",
+    "测试结果展示 - 详细的测试报告和错误分析",
+    "元素定位器管理 - 统一管理网页元素定位信息"
+  ],
+  "tech_stack": {
+    "backend": "Django 4.2+",
+    "automation": "Playwright",
+    "task_queue": "Celery + Redis",
+    "database": "SQLite (可切换PostgreSQL/MySQL)",
+    "frontend": "Bootstrap 5 + Vanilla JS"
+  },
+  "directory_structure": {
+    "automation_test_platform/": "Django项目配置",
+    "core/": "核心功能模块（Playwright引擎、脚本管理）",
+    "products/": "产品类型和参数管理",
+    "script_editor/": "脚本编辑器和元素定位器",
+    "test_manager/": "测试任务和结果管理",
+    "templates/": "前端HTML模板",
+    "static/": "静态资源文件",
+    "media/": "上传文件和截图",
+    "test_scripts/": "JSON格式测试脚本存储",
+    "element_locators/": "元素定位器JSON存储",
+    "test_results/": "测试结果JSON存储"
+  },
+  "api_endpoints": {
+    "产品管理": "/api/products/",
+    "脚本管理": "/api/scripts/",
+    "任务管理": "/api/tests/tasks/",
+    "结果查询": "/api/tests/results/",
+    "元素定位器": "/api/scripts/elements/",
+    "可视化编辑器": "/api/scripts/visual-editor/"
+  }
+}

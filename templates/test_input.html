@@ -1,0 +1,258 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>输入框中文输入测试</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-section h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+        .test-result {
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 4px;
+            background: #f8f9fa;
+            font-family: monospace;
+            min-height: 40px;
+        }
+        .status-ok { color: green; }
+        .status-error { color: red; }
+        .event-log {
+            max-height: 200px;
+            overflow-y: auto;
+            background: #000;
+            color: #0f0;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            border-radius: 4px;
+        }
+        .event-log div {
+            margin-bottom: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="mb-4">🧪 输入框中文输入测试页面</h1>
+        
+        <!-- 测试1: 普通输入框 -->
+        <div class="test-section">
+            <h3>测试1: 普通文本输入框</h3>
+            <div class="mb-3">
+                <label class="form-label">普通输入框（无事件处理）</label>
+                <input type="text" class="form-control" id="test1-input" placeholder="请输入中文测试...">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">文本域（无事件处理）</label>
+                <textarea class="form-control" id="test1-textarea" rows="3" placeholder="请输入中文测试..."></textarea>
+            </div>
+            <div class="test-result" id="test1-result">
+                状态: <span class="status-ok">等待输入</span>
+            </div>
+        </div>
+
+        <!-- 测试2: 带事件监听的输入框 -->
+        <div class="test-section">
+            <h3>测试2: 带事件监听的输入框</h3>
+            <div class="mb-3">
+                <label class="form-label">带 keydown 事件监听</label>
+                <input type="text" class="form-control" id="test2-input" placeholder="请输入中文测试...">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">带 keypress 事件监听</label>
+                <input type="text" class="form-control" id="test2-input-keypress" placeholder="请输入中文测试...">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">带 composition 事件监听</label>
+                <input type="text" class="form-control" id="test2-input-composition" placeholder="请输入中文测试...">
+            </div>
+            <div class="test-result" id="test2-result">
+                状态: <span class="status-ok">等待输入</span>
+            </div>
+        </div>
+
+        <!-- 测试3: Bootstrap Modal 中的输入框 -->
+        <div class="test-section">
+            <h3>测试3: Modal 中的输入框</h3>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#testModal">
+                打开测试 Modal
+            </button>
+            <div class="test-result" id="test3-result">
+                状态: <span class="status-ok">等待打开 Modal 测试</span>
+            </div>
+        </div>
+
+        <!-- 测试4: 事件日志 -->
+        <div class="test-section">
+            <h3>测试4: 事件日志</h3>
+            <div class="event-log" id="event-log">
+                <div>等待事件...</div>
+            </div>
+            <button class="btn btn-sm btn-secondary mt-2" onclick="clearLog()">清除日志</button>
+        </div>
+
+        <!-- 测试5: 诊断信息 -->
+        <div class="test-section">
+            <h3>测试5: 浏览器诊断信息</h3>
+            <div class="test-result" id="diagnostic-info">
+                加载中...
+            </div>
+        </div>
+    </div>
+
+    <!-- 测试 Modal -->
+    <div class="modal fade" id="testModal" tabindex="-1" data-bs-focus="false">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">测试 Modal</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Modal 中的输入框</label>
+                        <input type="text" class="form-control" id="modal-input" placeholder="请输入中文测试...">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Modal 中的文本域</label>
+                        <textarea class="form-control" id="modal-textarea" rows="3" placeholder="请输入中文测试..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 事件日志
+        let eventLog = [];
+        function logEvent(type, target, detail) {
+            const timestamp = new Date().toLocaleTimeString();
+            const log = `[${timestamp}] ${type} -> ${target} | ${detail}`;
+            eventLog.push(log);
+            
+            const logEl = document.getElementById('event-log');
+            const div = document.createElement('div');
+            div.textContent = log;
+            logEl.appendChild(div);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('event-log').innerHTML = '<div>日志已清除</div>';
+        }
+
+        // 测试1: 普通输入框 - 不添加任何事件监听
+        const test1Input = document.getElementById('test1-input');
+        const test1Textarea = document.getElementById('test1-textarea');
+        
+        test1Input.addEventListener('input', function(e) {
+            document.getElementById('test1-result').innerHTML = 
+                `状态: <span class="status-ok">✅ 可以输入 | 当前值: ${e.target.value}</span>`;
+        });
+
+        test1Textarea.addEventListener('input', function(e) {
+            document.getElementById('test1-result').innerHTML = 
+                `状态: <span class="status-ok">✅ 可以输入 | 当前值: ${e.target.value}</span>`;
+        });
+
+        // 测试2: 带事件监听的输入框
+        const test2Input = document.getElementById('test2-input');
+        const test2InputKeypress = document.getElementById('test2-input-keypress');
+        const test2InputComposition = document.getElementById('test2-input-composition');
+
+        // 测试 keydown
+        test2Input.addEventListener('keydown', function(e) {
+            logEvent('keydown', 'test2-input', `key=${e.key}, isComposing=${e.isComposing}`);
+        });
+        test2Input.addEventListener('input', function(e) {
+            logEvent('input', 'test2-input', `value=${e.target.value}`);
+            document.getElementById('test2-result').innerHTML = 
+                `状态: <span class="status-ok">✅ keydown 输入 | 当前值: ${e.target.value}</span>`;
+        });
+
+        // 测试 keypress
+        test2InputKeypress.addEventListener('keypress', function(e) {
+            logEvent('keypress', 'test2-input-keypress', `key=${e.key}, charCode=${e.charCode}`);
+        });
+        test2InputKeypress.addEventListener('input', function(e) {
+            logEvent('input', 'test2-input-keypress', `value=${e.target.value}`);
+        });
+
+        // 测试 composition
+        test2InputComposition.addEventListener('compositionstart', function(e) {
+            logEvent('compositionstart', 'test2-input-composition', '开始输入法组合');
+            e.target.isComposing = true;
+        });
+        test2InputComposition.addEventListener('compositionupdate', function(e) {
+            logEvent('compositionupdate', 'test2-input-composition', `data=${e.data}`);
+        });
+        test2InputComposition.addEventListener('compositionend', function(e) {
+            logEvent('compositionend', 'test2-input-composition', `结束输入法组合 | value=${e.target.value}`);
+            e.target.isComposing = false;
+        });
+        test2InputComposition.addEventListener('input', function(e) {
+            logEvent('input', 'test2-input-composition', `value=${e.target.value}, isComposing=${e.target.isComposing}`);
+        });
+
+        // 测试3: Modal 中的输入框
+        const modalInput = document.getElementById('modal-input');
+        const modalTextarea = document.getElementById('modal-textarea');
+        
+        modalInput.addEventListener('input', function(e) {
+            document.getElementById('test3-result').innerHTML = 
+                `状态: <span class="status-ok">✅ Modal 输入 | 当前值: ${e.target.value}</span>`;
+            logEvent('input', 'modal-input', `value=${e.target.value}`);
+        });
+        
+        modalTextarea.addEventListener('input', function(e) {
+            logEvent('input', 'modal-textarea', `value=${e.target.value}`);
+        });
+
+        // 全局事件监听
+        document.addEventListener('compositionstart', function(e) {
+            logEvent('全局 compositionstart', e.target.tagName, `目标ID=${e.target.id}`);
+        }, true);
+        
+        document.addEventListener('compositionend', function(e) {
+            logEvent('全局 compositionend', e.target.tagName, `目标ID=${e.target.id}, value=${e.target.value}`);
+        }, true);
+
+        // 测试5: 诊断信息
+        function updateDiagnosticInfo() {
+            const info = `
+                浏览器: ${navigator.userAgent}<br>
+                Bootstrap 版本: ${typeof bootstrap !== 'undefined' ? '已加载' : '未加载'}<br>
+                document.activeElement: ${document.activeElement ? document.activeElement.tagName + (document.activeElement.id ? '#' + document.activeElement.id : '') : '无'}<br>
+                输入法 API 支持: ${'oncompositionstart' in document ? '✅ 支持' : '❌ 不支持'}<br>
+            `;
+            document.getElementById('diagnostic-info').innerHTML = info;
+        }
+        
+        updateDiagnosticInfo();
+        setInterval(updateDiagnosticInfo, 2000);
+
+        // 记录页面加载
+        logEvent('页面加载', 'window', '测试页面已加载，开始测试中文输入...');
+    </script>
+</body>
+</html>

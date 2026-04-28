@@ -1,0 +1,655 @@
+{% extends 'base.html' %}
+
+{% block title %}测试结果详情 - 自动化测试平台{% endblock %}
+
+{% block extra_css %}
+<link href="{% static 'css/result_detail.css' %}" rel="stylesheet">
+<style>
+.result-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 2rem;
+    border-radius: 8px;
+    margin-bottom: 2rem;
+}
+.result-header.completed {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+}
+.result-header.failed {
+    background: linear-gradient(135deg, #dc3545 0%, #fd7e14 100%);
+}
+.result-header.partial {
+    background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+}
+.result-title {
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+.result-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+.meta-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+.stat-card-new {
+    background: white;
+    border-radius: 8px;
+    padding: 1.5rem;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.stat-card-new .stat-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+.stat-card-new .stat-number {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+.stat-card-new .stat-label {
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+.time-section {
+    background: white;
+    border-radius: 8px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    margin-bottom: 2rem;
+}
+.time-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #e9ecef;
+}
+.time-item:last-child {
+    border-bottom: none;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-file-earmark-text"></i> 测试结果详情</h2>
+        <div>
+            <a href="/results/" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> 返回
+            </a>
+        </div>
+    </div>
+    
+    <div id="result-header-container"></div>
+    
+    <div class="stat-grid" id="stat-grid-container"></div>
+    
+    <div id="time-section-container"></div>
+    
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-list-check me-2"></i>步骤执行详情</h5>
+            <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-secondary" onclick="expandAllSteps()">
+                    <i class="bi bi-arrows-expand"></i> 展开全部
+                </button>
+                <button class="btn btn-outline-secondary" onclick="collapseAllSteps()">
+                    <i class="bi bi-arrows-collapse"></i> 收起全部
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div id="steps-detail">
+                <div class="text-center py-4">加载中...</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const taskId = {{ task_id }};
+    let globalConfig = null;
+    
+    async function loadGlobalConfig() {
+        try {
+            const response = await axios.get(`${API_BASE}/scripts/global-config/`);
+            globalConfig = response.data;
+        } catch (error) {
+            console.error('Failed to load global config:', error);
+        }
+    }
+    
+    async function loadResultDetail() {
+        try {
+            await loadGlobalConfig();
+            
+            const response = await axios.get(`${API_BASE}/tests/tasks/${taskId}/`);
+            const data = response.data;
+            window._resultData = data;
+            
+            renderResultHeader(data);
+            renderStatGrid(data);
+            renderTimeSection(data);
+            
+            const scriptCount = data.script_count || 1;
+            if (scriptCount > 1 && data.task_scripts) {
+                renderMultiScriptResults(data.results, data.task_scripts);
+            } else {
+                renderSingleScriptResults(data.results);
+            }
+        } catch (error) {
+            console.error('Failed to load result detail:', error);
+            showToast('加载失败', 'error');
+        }
+    }
+    
+    function renderResultHeader(data) {
+        const container = document.getElementById('result-header-container');
+        const scriptCount = data.script_count || 1;
+        
+        let statusText, statusClass;
+        if (scriptCount > 1) {
+            if (data.report && data.report.failed_steps === 0) {
+                statusText = '全部成功';
+                statusClass = 'completed';
+            } else if (data.report && data.report.passed_steps > 0) {
+                statusText = '部分成功';
+                statusClass = 'partial';
+            } else {
+                statusText = '失败';
+                statusClass = 'failed';
+            }
+        } else {
+            statusText = {
+                'pending': '待执行',
+                'running': '执行中',
+                'completed': '成功',
+                'failed': '失败',
+                'cancelled': '已取消'
+            }[data.status] || data.status;
+            statusClass = data.status === 'completed' ? 'completed' : (data.status === 'failed' ? 'failed' : '');
+        }
+        
+        container.innerHTML = `
+            <div class="result-header ${statusClass}">
+                <div class="result-title">${data.name}</div>
+                <div class="result-meta">
+                    <div class="meta-item">
+                        <span>状态: ${statusText}</span>
+                    </div>
+                    <div class="meta-item">
+                        <span>脚本数: ${scriptCount}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    function renderStatGrid(data) {
+        const container = document.getElementById('stat-grid-container');
+        const report = data.report;
+        
+        if (!report) {
+            container.innerHTML = '';
+            return;
+        }
+        
+        const stats = [
+            { label: '通过率', value: report.pass_rate.toFixed(1) + '%', color: 'text-info' },
+            { label: '总步骤数', value: report.total_steps, color: 'text-primary' },
+            { label: '通过步骤', value: report.passed_steps, color: 'text-success' },
+            { label: '失败步骤', value: report.failed_steps, color: 'text-danger' },
+            { label: '跳过步骤', value: report.skipped_steps || 0, color: 'text-warning' },
+            { label: '执行时长', value: formatDuration(report.total_duration), color: 'text-secondary' },
+        ];
+        
+        if (data.script_count && data.script_count > 1) {
+            stats.unshift({ label: '脚本总数', value: data.script_count, color: 'text-primary' });
+            stats.push({ label: '脚本成功', value: data.scripts_passed || 0, color: 'text-success' });
+            stats.push({ label: '脚本失败', value: data.scripts_failed || 0, color: 'text-danger' });
+        }
+        
+        container.innerHTML = stats.map(stat => `
+            <div class="stat-card-new">
+                <div class="stat-number ${stat.color}">${stat.value}</div>
+                <div class="stat-label">${stat.label}</div>
+            </div>
+        `).join('');
+    }
+    
+    function renderTimeSection(data) {
+        const container = document.getElementById('time-section-container');
+        
+        container.innerHTML = `
+            <div class="time-section">
+                <h5 class="mb-3"><i class="bi bi-clock-history me-2"></i>执行时间</h5>
+                <div class="time-item">
+                    <span class="text-muted">创建时间</span>
+                    <span>${formatDate(data.created_at)}</span>
+                </div>
+                <div class="time-item">
+                    <span class="text-muted">开始时间</span>
+                    <span>${data.started_at ? formatDate(data.started_at) : '-'}</span>
+                </div>
+                <div class="time-item">
+                    <span class="text-muted">结束时间</span>
+                    <span>${data.finished_at ? formatDate(data.finished_at) : '-'}</span>
+                </div>
+            </div>
+        `;
+    }
+    
+    function formatDuration(seconds) {
+        if (!seconds) return '0s';
+        if (seconds < 60) {
+            return seconds.toFixed(2) + 's';
+        }
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = seconds % 60;
+        return `${minutes}m ${remainingSeconds.toFixed(2)}s`;
+    }
+    
+    function formatDate(dateStr) {
+        if (!dateStr) return '-';
+        const date = new Date(dateStr);
+        return date.toLocaleString('zh-CN', { 
+            year: 'numeric', 
+            month: '2-digit', 
+            day: '2-digit',
+            hour: '2-digit', 
+            minute: '2-digit', 
+            second: '2-digit' 
+        });
+    }
+    
+    function renderMultiScriptResults(results, taskScripts) {
+        const container = document.getElementById('steps-detail');
+        
+        if (!results || results.length === 0) {
+            container.innerHTML = '<div class="text-center text-muted py-4">暂无执行结果</div>';
+            return;
+        }
+        
+        const scriptResults = {};
+        taskScripts.forEach(ts => {
+            scriptResults[ts.script_name] = {
+                script: ts,
+                results: []
+            };
+        });
+        
+        results.forEach(r => {
+            let matched = false;
+            for (const scriptName in scriptResults) {
+                if (r.step_name && r.step_name.includes(`[${scriptName}]`)) {
+                    scriptResults[scriptName].results.push(r);
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) {
+                const firstKey = Object.keys(scriptResults)[0];
+                if (firstKey) scriptResults[firstKey].results.push(r);
+            }
+        });
+        
+        const scriptEntries = Object.entries(scriptResults);
+        if (scriptEntries.length <= 1) {
+            renderSingleScriptResults(results);
+            return;
+        }
+        
+        let accordionHtml = '<div class="accordion script-accordion" id="scriptAccordion">';
+        
+        scriptEntries.forEach(([scriptName, scriptData], idx) => {
+            const collapseId = `script-collapse-${idx}`;
+            const headerId = `script-heading-${idx}`;
+            
+            const scriptResults = scriptData.results;
+            const passedCount = scriptResults.filter(r => r.status === 'passed').length;
+            const failedCount = scriptResults.filter(r => r.status === 'failed').length;
+            const totalCount = scriptResults.length;
+            
+            const isExpanded = idx === 0 ? 'show' : '';
+            const buttonClass = idx === 0 ? '' : 'collapsed';
+            
+            accordionHtml += `
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="${headerId}">
+                        <button class="accordion-button ${buttonClass}" type="button" data-bs-toggle="collapse" data-bs-target="#${collapseId}" aria-expanded="${idx === 0}" aria-controls="${collapseId}">
+                            <div class="w-100 d-flex justify-content-between align-items-center">
+                                <div>
+                                    <i class="bi bi-code-slash me-2"></i>
+                                    ${scriptName}
+                                </div>
+                                <div class="text-muted small">
+                                    <span class="me-3">步骤: ${totalCount}</span>
+                                    <span class="me-3 text-success">通过: ${passedCount}</span>
+                                    <span class="text-danger">失败: ${failedCount}</span>
+                                </div>
+                            </div>
+                        </button>
+                    </h2>
+                    <div id="${collapseId}" class="accordion-collapse collapse ${isExpanded}" aria-labelledby="${headerId}" data-bs-parent="#scriptAccordion">
+                        <div class="accordion-body">
+                            ${renderResults(scriptResults, idx)}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        accordionHtml += '</div>';
+        container.innerHTML = accordionHtml;
+    }
+    
+    function renderSingleScriptResults(results) {
+        const container = document.getElementById('steps-detail');
+        
+        if (!results || results.length === 0) {
+            container.innerHTML = '<div class="text-center text-muted py-4">暂无执行结果</div>';
+            return;
+        }
+        
+        const scriptName = window._resultData && window._resultData.script_name ? window._resultData.script_name : '脚本执行步骤';
+        
+        container.innerHTML = `
+            <div class="accordion" id="singleScriptAccordion">
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="singleScriptHeading">
+                        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#singleScriptCollapse" aria-expanded="true" aria-controls="singleScriptCollapse">
+                            <i class="bi bi-code-slash me-2"></i>
+                            ${scriptName}
+                        </button>
+                    </h2>
+                    <div id="singleScriptCollapse" class="accordion-collapse collapse show" aria-labelledby="singleScriptHeading" data-bs-parent="#singleScriptAccordion">
+                        <div class="accordion-body">
+                            ${renderResults(results, 0)}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    function renderResults(results, groupIndex) {
+        if (!results || results.length === 0) {
+            return '<div class="text-center text-muted py-3">暂无步骤结果</div>';
+        }
+        
+        return results.map((result, index) => {
+            const globalIndex = groupIndex * 1000 + index;
+            const statusClass = {
+                'passed': 'success',
+                'failed': 'danger',
+                'skipped': 'warning',
+                'error': 'danger'
+            }[result.status] || 'secondary';
+            
+            const statusText = {
+                'passed': '通过',
+                'failed': '失败',
+                'skipped': '跳过',
+                'error': '错误'
+            }[result.status] || result.status;
+            
+            let stepNameDisplay = result.step_name;
+            const match = result.step_name.match(/^\[([^\]]+)\]\s*(.*)/);
+            if (match) {
+                stepNameDisplay = match[2];
+            }
+            
+            const actionValuesHtml = renderActionValues(result.action_values, globalIndex);
+            
+            let screenshotHtml = '';
+            if (result.status === 'failed' && result.screenshot) {
+                screenshotHtml = `
+                    <div class="mt-2">
+                        <a href="${result.screenshot}" target="_blank" class="btn btn-sm btn-outline-danger">
+                            <i class="bi bi-image"></i> 查看错误截图
+                        </a>
+                    </div>
+                `;
+            } else if (globalConfig && globalConfig.step_screenshot && result.element_screenshot) {
+                screenshotHtml = `
+                    <div class="mt-2">
+                        <a href="${result.element_screenshot}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-image"></i> 查看截图
+                        </a>
+                    </div>
+                `;
+            }
+            
+            return `
+                <div class="step-item border-${statusClass}">
+                    ${match ? `<div class="script-label-badge">${match[1]}</div>` : ''}
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="d-flex align-items-center">
+                            <span class="step-number bg-${statusClass}">${index + 1}</span>
+                            <div>
+                                <div class="fw-bold">${stepNameDisplay}</div>
+                                <small class="text-muted">耗时: ${result.duration.toFixed(2)}s</small>
+                            </div>
+                        </div>
+                        <span class="badge bg-${statusClass}">${statusText}</span>
+                    </div>
+                    ${result.error_message ? `
+                        <div class="error-display-container mt-2" data-step-index="${globalIndex}">
+                            <div class="alert alert-danger mb-0">
+                                <strong>错误信息:</strong><br>
+                                <div class="formatted-error-msg">${result.error_message}</div>
+                                ${result.error_stack && result.error_stack !== result.error_message ? `
+                                    <button class="btn btn-sm btn-outline-secondary mt-2 toggle-console-error-btn" onclick="toggleConsoleError(${globalIndex})">
+                                        <i class="bi bi-terminal"></i> 控制台报错
+                                    </button>
+                                    <div class="console-error-content mt-2" id="console-error-${globalIndex}" style="display: none;">
+                                        <strong>控制台原始报错:</strong><br>
+                                        <pre class="mb-0">${result.error_stack}</pre>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${renderLogs(result.logs, globalIndex)}
+                    ${actionValuesHtml}
+                    ${screenshotHtml}
+                </div>
+            `;
+        }).join('');
+    }
+    
+    function renderActionValues(actionValues, stepIndex) {
+        if (!actionValues || Object.keys(actionValues).length === 0) {
+            return '';
+        }
+        
+        if (actionValues.sub_steps) {
+            let subStepsHtml = actionValues.sub_steps.map((sub, subIdx) => {
+                const subErrorKey = `sub-${stepIndex}-${subIdx}`;
+                const statusClass = {
+                    'passed': 'success',
+                    'failed': 'danger',
+                    'skipped': 'warning',
+                    'error': 'danger'
+                }[sub.status] || 'secondary';
+                const statusText = {
+                    'passed': '通过',
+                    'failed': '失败',
+                    'skipped': '跳过',
+                    'error': '错误'
+                }[sub.status] || sub.status || '';
+
+                let valuesHtml = '';
+                if (sub.values && Object.keys(sub.values).length > 0) {
+                    valuesHtml = Object.entries(sub.values).map(([key, value]) => {
+                        let displayValue = value;
+                        if (Array.isArray(value)) {
+                            displayValue = value.join(', ');
+                        }
+                        return `
+                            <div class="action-value-item">
+                                <span class="action-value-label">${key}:</span>
+                                <span class="action-value-content">${displayValue}</span>
+                            </div>
+                        `;
+                    }).join('');
+                }
+
+                let errorHtml = '';
+                if (sub.error) {
+                    const hasStack = sub.error_stack && sub.error_stack !== sub.error;
+                    errorHtml = `
+                        <div class="alert alert-danger py-1 px-2 mt-2 mb-0" style="font-size: 0.875rem;" data-step-index="${subErrorKey}">
+                            <div class="formatted-error-msg">${sub.error}</div>
+                            ${hasStack ? `
+                                <button class="btn btn-sm btn-outline-secondary mt-1 toggle-console-error-btn" onclick="toggleConsoleError('${subErrorKey}')">
+                                    <i class="bi bi-terminal"></i> 控制台报错
+                                </button>
+                                <div class="console-error-content mt-1" id="console-error-${subErrorKey}" style="display: none;">
+                                    <strong>控制台原始报错:</strong><br>
+                                    <pre class="mb-0">${sub.error_stack}</pre>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }
+
+                return `
+                    <div class="sub-step-item">
+                        <div class="d-flex align-items-center">
+                            <span class="fw-bold">${sub.step_name}</span>
+                            ${statusText ? `<span class="badge bg-${statusClass} ms-2">${statusText}</span>` : ''}
+                        </div>
+                        ${valuesHtml ? `<div class="action-values-section mt-2">${valuesHtml}</div>` : ''}
+                        ${errorHtml}
+                    </div>
+                `;
+            }).join('');
+            
+            return `
+                <div class="sub-steps-section">
+                    <div class="fw-bold mb-2"><i class="bi bi-list-nested me-1"></i>子步骤执行值</div>
+                    ${subStepsHtml}
+                </div>
+            `;
+        }
+        
+        let valuesHtml = Object.entries(actionValues).map(([key, value]) => {
+            let displayValue = value;
+            if (Array.isArray(value)) {
+                displayValue = value.join(', ');
+            }
+            return `
+                <div class="action-value-item">
+                    <span class="action-value-label">${key}:</span>
+                    <span class="action-value-content">${displayValue}</span>
+                </div>
+            `;
+        }).join('');
+        
+        return `
+            <div class="accordion mt-2" id="accordion-${stepIndex}">
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-${stepIndex}">
+                            <i class="bi bi-list-check me-2"></i>查看执行值
+                        </button>
+                    </h2>
+                    <div id="collapse-${stepIndex}" class="accordion-collapse collapse" data-bs-parent="#accordion-${stepIndex}">
+                        <div class="accordion-body py-2">
+                            <div class="action-values-section">
+                                ${valuesHtml}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    function renderLogs(logs, stepIndex) {
+        if (!logs || logs.length === 0) {
+            return '';
+        }
+        
+        const logItems = logs.map((log, idx) => {
+            const timestamp = log.timestamp || '';
+            const level = log.level || 'INFO';
+            const message = log.message || log;
+            const levelClass = {
+                'DEBUG': 'text-muted',
+                'INFO': 'text-primary',
+                'WARNING': 'text-warning',
+                'ERROR': 'text-danger'
+            }[level] || 'text-secondary';
+            
+            return `<div class="log-line"><span class="text-muted">[${timestamp}]</span> <span class="${levelClass}">[${level}]</span> ${message}</div>`;
+        }).join('');
+        
+        return `
+            <div class="accordion mt-2" id="logs-accordion-${stepIndex}">
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#logs-collapse-${stepIndex}">
+                            <i class="bi bi-terminal me-2"></i>执行日志 (${logs.length}条)
+                        </button>
+                    </h2>
+                    <div id="logs-collapse-${stepIndex}" class="accordion-collapse collapse" data-bs-parent="#logs-accordion-${stepIndex}">
+                        <div class="accordion-body py-2">
+                            <div class="log-container">
+                                ${logItems}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    function expandAllSteps() {
+        document.querySelectorAll('.accordion-collapse').forEach(el => {
+            el.classList.add('show');
+        });
+        document.querySelectorAll('.accordion-button.collapsed').forEach(el => {
+            el.classList.remove('collapsed');
+        });
+    }
+    
+    function collapseAllSteps() {
+        document.querySelectorAll('.accordion-collapse.show').forEach(el => {
+            el.classList.remove('show');
+        });
+        document.querySelectorAll('.accordion-button:not(.collapsed)').forEach(el => {
+            el.classList.add('collapsed');
+        });
+    }
+    
+    function toggleConsoleError(stepIndex) {
+        const errorContent = document.getElementById(`console-error-${stepIndex}`);
+        const button = document.querySelector(`[data-step-index="${stepIndex}"] .toggle-console-error-btn`);
+        if (errorContent.style.display === 'none') {
+            errorContent.style.display = 'block';
+            button.innerHTML = '<i class="bi bi-terminal"></i> 控制台报错';
+        } else {
+            errorContent.style.display = 'none';
+            button.innerHTML = '<i class="bi bi-terminal"></i> 控制台报错';
+        }
+    }
+    
+    loadResultDetail();
+</script>
+{% endblock %}

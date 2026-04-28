@@ -1,0 +1,285 @@
+{% extends 'base.html' %}
+
+{% block title %}测试结果 - 自动化测试平台{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-file-earmark-text"></i> 测试结果</h2>
+    </div>
+    
+    <div class="row mb-3 g-2">
+        <div class="col-md-4">
+            <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control" id="individual-search" placeholder="搜索任务名称">
+            </div>
+        </div>
+        <div class="col-md-2">
+            <select class="form-select" id="individual-page-size">
+                <option value="10">10条/页</option>
+                <option value="20">20条/页</option>
+                <option value="50">50条/页</option>
+                <option value="100">100条/页</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-primary w-100" onclick="resetIndividualFilters()">
+                <i class="bi bi-arrow-clockwise"></i> 重置
+            </button>
+        </div>
+    </div>
+    
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>任务ID</th>
+                            <th>任务名称</th>
+                            <th>总步骤</th>
+                            <th>通过</th>
+                            <th>失败</th>
+                            <th>跳过</th>
+                            <th>通过率</th>
+                            <th>执行时长</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="individual-tbody">
+                        <tr>
+                            <td colspan="9" class="text-center">加载中...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <nav aria-label="Individual pagination">
+                <ul class="pagination justify-content-center" id="individual-pagination"></ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let individualTasks = [];
+    
+    let individualState = {
+        search: '',
+        pageSize: 10,
+        currentPage: 1
+    };
+    
+    async function loadIndividualTasks() {
+        try {
+            const response = await axios.get(`${API_BASE}/tests/tasks/`);
+            individualTasks = response.data || [];
+            renderIndividualTasks();
+        } catch (error) {
+            console.error('Failed to load tasks:', error);
+            document.getElementById('individual-tbody').innerHTML = 
+                '<tr><td colspan="9" class="text-center text-danger">加载失败</td></tr>';
+        }
+    }
+    
+    function filterIndividualTasks() {
+        if (!individualState.search) return individualTasks;
+        return individualTasks.filter(task => 
+            task.name && task.name.toLowerCase().includes(individualState.search.toLowerCase())
+        );
+    }
+    
+    function renderIndividualTasks() {
+        const filtered = filterIndividualTasks();
+        const tbody = document.getElementById('individual-tbody');
+        
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">暂无数据</td></tr>';
+            document.getElementById('individual-pagination').innerHTML = '';
+            return;
+        }
+        
+        const totalPages = Math.ceil(filtered.length / individualState.pageSize);
+        if (individualState.currentPage > totalPages) individualState.currentPage = totalPages;
+        
+        const start = (individualState.currentPage - 1) * individualState.pageSize;
+        const end = start + individualState.pageSize;
+        const pageData = filtered.slice(start, end);
+        
+        tbody.innerHTML = pageData.map(task => {
+            const report = task.report;
+            const passRate = report && report.total_steps > 0 
+                ? report.pass_rate 
+                : '-';
+            
+            const totalSteps = report ? report.total_steps : '-';
+            const passedSteps = report ? report.passed_steps : '-';
+            const failedSteps = report ? report.failed_steps : '-';
+            const skippedSteps = report ? report.skipped_steps : '-';
+            const duration = report && report.total_duration 
+                ? `${report.total_duration.toFixed(2)}s` 
+                : '-';
+            
+            const passRateHtml = typeof passRate === 'number' 
+                ? `<div class="progress" style="width: 100px; height: 20px;">
+                       <div class="progress-bar bg-success" style="width: ${passRate}%">${passRate.toFixed(1)}%</div>
+                   </div>`
+                : '-';
+            
+            return `
+                <tr>
+                    <td>${task.id}</td>
+                    <td>${task.name || '-'}</td>
+                    <td>${totalSteps}</td>
+                    <td class="text-success">${passedSteps}</td>
+                    <td class="text-danger">${failedSteps}</td>
+                    <td class="text-warning">${skippedSteps}</td>
+                    <td>${passRateHtml}</td>
+                    <td>${duration}</td>
+                    <td>
+                        <a href="/results/${task.id}" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-eye"></i> 详情
+                        </a>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+        
+        renderIndividualPagination(totalPages, filtered.length);
+    }
+    
+    function renderIndividualPagination(totalPages, totalItems) {
+        const pagination = document.getElementById('individual-pagination');
+        if (totalPages <= 1) {
+            pagination.innerHTML = '';
+            return;
+        }
+        
+        let html = `
+            <li class="page-item ${individualState.currentPage === 1 ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="goToIndividualPage(${individualState.currentPage - 1}); return false;">上一页</a>
+            </li>
+        `;
+        
+        for (let i = 1; i <= totalPages; i++) {
+            if (totalPages > 7 && Math.abs(i - individualState.currentPage) > 2 && i !== 1 && i !== totalPages) {
+                if (i === individualState.currentPage - 3 || i === individualState.currentPage + 3) {
+                    html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                }
+                continue;
+            }
+            html += `
+                <li class="page-item ${i === individualState.currentPage ? 'active' : ''}">
+                    <a class="page-link" href="#" onclick="goToIndividualPage(${i}); return false;">${i}</a>
+                </li>
+            `;
+        }
+        
+        html += `
+            <li class="page-item ${individualState.currentPage === totalPages ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="goToIndividualPage(${individualState.currentPage + 1}); return false;">下一页</a>
+            </li>
+        `;
+        
+        html += `<li class="page-item disabled"><span class="page-link">共 ${totalItems} 条</span></li>`;
+        
+        pagination.innerHTML = html;
+    }
+    
+    function goToIndividualPage(page) {
+        individualState.currentPage = page;
+        renderIndividualTasks();
+    }
+    
+    function resetIndividualFilters() {
+        document.getElementById('individual-search').value = '';
+        document.getElementById('individual-page-size').value = '10';
+        individualState = { search: '', pageSize: 10, currentPage: 1 };
+        renderIndividualTasks();
+    }
+    
+    async function viewTaskDetail(taskId) {
+        try {
+            const response = await axios.get(`${API_BASE}/tests/tasks/${taskId}/`);
+            const task = response.data;
+            const report = task.report;
+            
+            let reportHtml = '<p class="text-muted">暂无报告数据</p>';
+            if (report) {
+                const passRate = report.pass_rate || 0;
+                reportHtml = `
+                    <div class="mb-3">
+                        <h6>测试报告</h6>
+                        <table class="table table-sm">
+                            <tr>
+                                <th>总步骤</th>
+                                <td>${report.total_steps}</td>
+                                <th>通过</th>
+                                <td class="text-success">${report.passed_steps}</td>
+                            </tr>
+                            <tr>
+                                <th>失败</th>
+                                <td class="text-danger">${report.failed_steps}</td>
+                                <th>跳过</th>
+                                <td class="text-warning">${report.skipped_steps}</td>
+                            </tr>
+                            <tr>
+                                <th>通过率</th>
+                                <td>
+                                    <div class="progress" style="width: 150px; height: 20px;">
+                                        <div class="progress-bar bg-success" style="width: ${passRate}%">${passRate.toFixed(1)}%</div>
+                                    </div>
+                                </td>
+                                <th>执行时长</th>
+                                <td>${report.total_duration ? report.total_duration.toFixed(2) + 's' : '-'}</td>
+                            </tr>
+                        </table>
+                    </div>
+                `;
+            }
+            
+            document.getElementById('taskDetailBody').innerHTML = `
+                <div class="mb-3">
+                    <strong>任务ID:</strong> ${task.id}<br>
+                    <strong>任务名称:</strong> ${task.name}<br>
+                    <strong>脚本:</strong> ${task.script_name || '-'}<br>
+                    <strong>状态:</strong> ${getStatusBadge(task.status)}<br>
+                    <strong>创建时间:</strong> ${formatDate(task.created_at)}<br>
+                    <strong>开始时间:</strong> ${formatDate(task.started_at)}<br>
+                    <strong>结束时间:</strong> ${formatDate(task.finished_at)}<br>
+                </div>
+                ${reportHtml}
+                <a href="/results/${taskId}" class="btn btn-primary mt-3">
+                    <i class="bi bi-box-arrow-up-right me-1"></i>查看任务全部详情
+                </a>
+            `;
+            
+            const modal = new bootstrap.Modal(document.getElementById('taskDetailModal'));
+            modal.show();
+        } catch (error) {
+            console.error('Failed to load task detail:', error);
+            showToast('加载详情失败', 'error');
+        }
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        document.getElementById('individual-search').addEventListener('input', function(e) {
+            individualState.search = e.target.value;
+            individualState.currentPage = 1;
+            renderIndividualTasks();
+        });
+        
+        document.getElementById('individual-page-size').addEventListener('change', function(e) {
+            individualState.pageSize = parseInt(e.target.value);
+            individualState.currentPage = 1;
+            renderIndividualTasks();
+        });
+        
+        loadIndividualTasks();
+    });
+</script>
+{% endblock %}

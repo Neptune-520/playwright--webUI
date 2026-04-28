@@ -1,0 +1,311 @@
+{% extends 'base.html' %}
+
+{% block title %}全局配置 - 自动化测试平台{% endblock %}
+
+{% block content %}
+<style>
+    .col-lg-6 {
+        flex: 0 0 auto;
+        width: 50%;
+        display: inline-grid;
+    }
+</style>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-gear"></i> 全局配置</h2>
+    </div>
+    
+    <div class="row">
+        <!-- 浏览器配置卡片 -->
+        <div class="col-lg-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0"><i class="bi bi-browser-chrome me-2"></i>浏览器配置</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        <label class="form-label">浏览器启动模式</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="headless-mode" id="headless-false" value="false">
+                            <label class="form-check-label" for="headless-false">
+                                <i class="bi bi-eye me-1"></i>显示浏览器
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="headless-mode" id="headless-true" value="true">
+                            <label class="form-check-label" for="headless-true">
+                                <i class="bi bi-eye-slash me-1"></i>无头模式
+                            </label>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">视口宽度</label>
+                                <input type="number" class="form-control" id="viewport-width" min="800" max="3840">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">视口高度</label>
+                                <input type="number" class="form-control" id="viewport-height" min="600" max="2160">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">操作延迟 (毫秒)</label>
+                                <input type="number" class="form-control" id="slow-mo" min="0" max="5000" step="100">
+                                <small class="text-muted">每个操作之间的延迟时间，如 1000毫秒 = 1秒</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">默认超时时间 (毫秒)</label>
+                                <input type="number" class="form-control" id="default-timeout" min="1000" max="300000" step="1000">
+                                <small class="text-muted">元素等待和操作的超时时间，如 30000毫秒 = 30秒</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- API配置卡片 -->
+        <div class="col-lg-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0"><i class="bi bi-shop me-2"></i>API配置</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">集合文件API地址</label>
+                        <input type="text" class="form-control" id="marketplace-api-url" placeholder="http://127.0.0.1:8000">
+                        <small class="text-muted">用于从集合文件导入动作集合</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">自动化管理平台API地址</label>
+                        <input type="text" class="form-control" id="management-platform-url" placeholder="http://localhost:8001/api/script-results/upload">
+                        <small class="text-muted">脚本执行结果上传的目标地址</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">分析报告上传用户名</label>
+                        <input type="text" class="form-control" id="username" placeholder="请输入用户名">
+                        <small class="text-muted">用于标识上传的任务结果报告</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 邮件通知配置卡片 -->
+        <div class="col-lg-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0"><i class="bi bi-envelope me-2"></i>邮件通知配置</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3 form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="email-enable">
+                        <label class="form-check-label" for="email-enable">
+                            <strong>启用邮件通知</strong>
+                        </label>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">SMTP服务地址</label>
+                                <input type="text" class="form-control" id="email-smtp-host" placeholder="smtp.qq.com">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">端口</label>
+                                <input type="number" class="form-control" id="email-smtp-port" min="1" max="65535" value="465">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">发件人邮箱</label>
+                                <input type="email" class="form-control" id="email-username" placeholder="your@email.com">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">授权码</label>
+                                <input type="password" class="form-control" id="email-password" placeholder="请输入邮箱密码或授权码">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">收件人列表</label>
+                        <input type="text" class="form-control" id="email-recipients" placeholder="多个邮箱用逗号分隔">
+                        <small class="text-muted">可写多个，用英文逗号,分割</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">报告访问地址</label>
+                        <input type="text" class="form-control" id="report-base-url" placeholder="http://localhost:8000">
+                        <small class="text-muted">用于邮件中报告链接的访问地址</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 其他配置卡片 -->
+        <div class="col-lg-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0"><i class="bi bi-sliders me-2"></i>其他配置</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="step-screenshot">
+                            <label class="form-check-label" for="step-screenshot">
+                                <strong>截图开关</strong>
+                                <small class="d-block text-muted">在每个步骤执行后截取操作元素的截图</small>
+                            </label>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <button class="btn btn-outline-danger w-100" onclick="clearScreenshots()">
+                                        <i class="bi bi-camera me-2"></i>清理截图
+                                    </button>
+                                </div>
+                                <div class="col-md-4">
+                                    <button class="btn btn-outline-danger w-100" onclick="clearTaskResults()">
+                                        <i class="bi bi-file-earmark me-2"></i>清理任务结果
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 保存按钮 -->
+    <div class="row">
+        <div class="col-12">
+            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                <button class="btn btn-primary btn-lg px-5" onclick="saveConfig()">
+                    <i class="bi bi-check-circle me-2"></i>保存配置
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    async function loadConfig() {
+        try {
+            const response = await axios.get(`${API_BASE}/scripts/global-config/`);
+            const config = response.data;
+            
+            if (config.headless_mode) {
+                document.getElementById('headless-true').checked = true;
+            } else {
+                document.getElementById('headless-false').checked = true;
+            }
+            
+            document.getElementById('default-timeout').value = config.default_timeout || 30000;
+            document.getElementById('step-screenshot').checked = config.step_screenshot || false;
+            document.getElementById('slow-mo').value = config.slow_mo || 0;
+            document.getElementById('viewport-width').value = config.viewport_width || 1920;
+            document.getElementById('viewport-height').value = config.viewport_height || 1080;
+            document.getElementById('marketplace-api-url').value = config.marketplace_api_url || 'http://127.0.0.1:8000';
+            document.getElementById('management-platform-url').value = config.management_platform_url || 'http://localhost:8001/api/script-results/upload';
+            document.getElementById('username').value = config.username || '';
+            document.getElementById('email-enable').checked = config.email_enable || false;
+            document.getElementById('email-smtp-host').value = config.email_smtp_host || '';
+            document.getElementById('email-smtp-port').value = config.email_smtp_port || 465;
+            document.getElementById('email-username').value = config.email_username || '';
+            document.getElementById('email-password').value = config.email_password || '';
+            document.getElementById('email-recipients').value = config.email_recipients || '';
+            document.getElementById('report-base-url').value = config.report_base_url || '';
+        } catch (error) {
+            console.error('Failed to load config:', error);
+            showToast('加载配置失败', 'error');
+        }
+    }
+    
+    async function saveConfig() {
+        const headlessMode = document.getElementById('headless-true').checked;
+        const defaultTimeout = parseInt(document.getElementById('default-timeout').value) || 30000;
+        const stepScreenshot = document.getElementById('step-screenshot').checked;
+        const slowMo = parseInt(document.getElementById('slow-mo').value) || 0;
+        const viewportWidth = parseInt(document.getElementById('viewport-width').value) || 1920;
+        const viewportHeight = parseInt(document.getElementById('viewport-height').value) || 1080;
+        const marketplaceApiUrl = document.getElementById('marketplace-api-url').value.trim() || 'http://127.0.0.1:8000';
+        const managementPlatformUrl = document.getElementById('management-platform-url').value.trim() || 'http://localhost:8001/api/script-results/upload';
+        const username = document.getElementById('username').value.trim();
+        const emailEnable = document.getElementById('email-enable').checked;
+        const emailSmtpHost = document.getElementById('email-smtp-host').value.trim();
+        const emailSmtpPort = parseInt(document.getElementById('email-smtp-port').value) || 465;
+        const emailUsername = document.getElementById('email-username').value.trim();
+        const emailPassword = document.getElementById('email-password').value;
+        const emailRecipients = document.getElementById('email-recipients').value.trim();
+        const reportBaseUrl = document.getElementById('report-base-url').value.trim();
+        
+        const data = {
+            headless_mode: headlessMode,
+            default_timeout: defaultTimeout,
+            step_screenshot: stepScreenshot,
+            slow_mo: slowMo,
+            viewport_width: viewportWidth,
+            viewport_height: viewportHeight,
+            marketplace_api_url: marketplaceApiUrl,
+            management_platform_url: managementPlatformUrl,
+            username: username,
+            email_enable: emailEnable,
+            email_smtp_host: emailSmtpHost,
+            email_smtp_port: emailSmtpPort,
+            email_username: emailUsername,
+            email_password: emailPassword,
+            email_recipients: emailRecipients,
+            email_use_ssl: emailSmtpPort === 465,
+            report_base_url: reportBaseUrl
+        };
+        
+        try {
+            await axios.put(`${API_BASE}/scripts/global-config/`, data);
+            showToast('配置保存成功');
+            loadConfig();
+        } catch (error) {
+            console.error('Failed to save config:', error);
+            showToast('保存失败: ' + (error.response?.data?.detail || error.message), 'error');
+        }
+    }
+    
+    async function clearScreenshots() {
+        if (!confirm('确定要删除所有保存的截图吗？此操作不可撤销。')) return;
+        try {
+            const response = await axios.delete(`${API_BASE}/core/scripts/clear-screenshots/`);
+            showToast(response.data.message || '截图清理成功');
+        } catch (error) {
+            console.error('Failed to clear screenshots:', error);
+            showToast('清理截图失败', 'error');
+        }
+    }
+    
+    async function clearTaskResults() {
+        if (!confirm('确定要删除所有任务执行结果吗？此操作不可撤销。')) return;
+        try {
+            const response = await axios.delete(`${API_BASE}/core/scripts/clear-task-results/`);
+            showToast(response.data.message || '任务结果清理成功');
+        } catch (error) {
+            console.error('Failed to clear task results:', error);
+            showToast('清理任务结果失败', 'error');
+        }
+    }
+    
+    loadConfig();
+</script>
+{% endblock %}

@@ -1,0 +1,204 @@
+.step-item {
+    padding: 15px;
+    margin-bottom: 10px;
+    border-left: 4px solid #dee2e6;
+    background: white;
+    border-radius: 0 8px 8px 0;
+}
+.step-item.border-success { border-left-color: #28a745; }
+.step-item.border-danger { border-left-color: #dc3545; }
+.step-item.border-warning { border-left-color: #ffc107; }
+.step-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    color: white;
+    font-weight: bold;
+    margin-right: 10px;
+}
+.action-values-section {
+    background: #f8f9fa;
+    border-radius: 6px;
+    padding: 10px 15px;
+    margin-top: 10px;
+}
+.action-value-item {
+    display: flex;
+    align-items: center;
+    padding: 5px 0;
+    border-bottom: 1px dashed #e9ecef;
+}
+.action-value-item:last-child {
+    border-bottom: none;
+}
+.action-value-label {
+    font-weight: 500;
+    color: #495057;
+    min-width: 100px;
+}
+.action-value-content {
+    color: #212529;
+    font-family: monospace;
+    background: #e9ecef;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+.sub-steps-section {
+    margin-top: 10px;
+    padding: 10px;
+    background: #fff3cd;
+    border-radius: 6px;
+}
+.sub-step-item {
+    padding: 8px 12px;
+    margin: 5px 0;
+    background: white;
+    border-radius: 4px;
+    border-left: 3px solid #ffc107;
+}
+.multi-script-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 15px 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+.multi-script-header h5 { margin: 0; }
+.script-accordion .accordion-button {
+    font-weight: 600;
+    background-color: #f8f9fa;
+}
+.script-accordion .accordion-button:not(.collapsed) {
+    background-color: #e9ecef;
+    color: #4A90E2;
+}
+.script-label-badge {
+    display: inline-block;
+    background: #4A90E2;
+    color: white;
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-bottom: 5px;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.info-row:last-child {
+    border-bottom: none;
+}
+
+.info-label {
+    font-weight: 600;
+    color: #495057;
+}
+
+.info-value {
+    color: #212529;
+    font-family: 'Courier New', monospace;
+}
+
+.parameters-section {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.param-row {
+    display: flex;
+    padding: 8px 0;
+    border-bottom: 1px solid #f8f9fa;
+}
+
+.param-row:last-child {
+    border-bottom: none;
+}
+
+.param-label {
+    font-weight: 600;
+    color: #495057;
+    min-width: 150px;
+    flex-shrink: 0;
+}
+
+.param-value {
+    color: #212529;
+    font-family: 'Courier New', monospace;
+    background: #f8f9fa;
+    padding: 4px 8px;
+    border-radius: 4px;
+    word-break: break-all;
+    white-space: pre-wrap;
+    flex: 1;
+}
+
+.log-container {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    padding: 15px;
+    border-radius: 6px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.log-line {
+    margin: 3px 0;
+    line-height: 1.5;
+}
+
+.error-stack-content {
+    background: #fff5f5;
+    border: 1px solid #ff6b6b;
+    color: #d32f2f;
+    padding: 15px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    max-height: 500px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    margin-bottom: 0;
+}
+
+.formatted-error-msg {
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: #721c24;
+    padding: 5px 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.console-error-content {
+    background: rgba(0, 0, 0, 0.05);
+    padding: 10px;
+    border-radius: 4px;
+    margin-top: 10px;
+}
+
+.console-error-content pre {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    padding: 10px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    max-height: 300px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.toggle-console-error-btn {
+    font-size: 0.8rem;
+    padding: 2px 8px;
+}
