@@ -340,10 +340,3 @@ run.bat
 cd automated_management_platform\backend && uvicorn main:app --host 0.0.0.0 --port 8001 --reload
 cd automated_management_platform\frontend && npm install && npm run dev
 ```
-
-## 后续建议
-
-- 将 `.env.example` 与实际配置读取逻辑统一
-- 将 Vite 代理目标改为可配置项
-- 补充统一的测试方案与最小回归测试集
-- 为主平台和子平台分别补充更细的部署文档
